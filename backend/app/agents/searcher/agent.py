@@ -1,8 +1,7 @@
-from app.core.llm import format_prompt, llm, load_prompt
+from app.core import format_prompt, llm, load_prompt, build_neo4j_hints
 from logger import logger
 
 from .models import SearchInput, SearchOutput
-from .utils import build_neo4j_hints
 
 
 class SearcherAgent:

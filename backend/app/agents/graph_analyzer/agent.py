@@ -4,8 +4,6 @@ from logger import logger
 
 from .models import GraphAnalyzerQueryInput, GraphAnalyzerQueryOutput
 
-__all__ = ["GraphAgent"]
-
 
 class GraphAnalyzerAgent:
     def __init__(self) -> None:

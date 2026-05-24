@@ -29,6 +29,15 @@ from app.agents.searcher import (
     SearchInput,
     SearchOutput,
 )
+from app.agents.web_searcher import (
+    WebSearcherAgent,
+    WebSearchInput,
+    WebSearchOutput,
+    SearchResult,
+    web_search,
+    search_to_text,
+)
+from app.agents.crew import IncidentAnalysisCrew, WebSearchTool
 
 __all__ = [
     "ClassifierAgent",
@@ -52,4 +61,12 @@ __all__ = [
     "RemediatorOutput",
     "EscalationPath",
     "RemediationStep",
+    "WebSearcherAgent",
+    "WebSearchInput",
+    "WebSearchOutput",
+    "SearchResult",
+    "web_search",
+    "search_to_text",
+    "IncidentAnalysisCrew",
+    "WebSearchTool",
 ]
