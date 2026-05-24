@@ -3,15 +3,15 @@ name: Backend CI
 on:
   push:
     branches: [main, develop]
-    paths:
-      - "backend/**"
+    paths: ["backend/**"]
   pull_request:
     branches: [main, develop]
-    paths:
-      - "backend/**"
+    paths: ["backend/**"]
 
 jobs:
-  lint-and-test:
+  # Lint & Test
+  test:
+    name: Lint & Test (Python 3.11)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -24,8 +24,7 @@ jobs:
           POSTGRES_DB: opspilot_test
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: password
-        ports:
-          - 5432:5432
+        ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -33,13 +32,14 @@ jobs:
           --health-retries 5
 
     env:
-      OPENAI_API_KEY: test-key
+      OPENAI_API_KEY: test-key-ci
       OPENAI_BASE_URL: https://api.openai.com/v1
       OPENAI_MODEL: gpt-4o
       NEO4J_URI: bolt://localhost:7687
       NEO4J_USERNAME: neo4j
       NEO4J_PASSWORD: password
       POSTGRES_URL: postgresql+asyncpg://postgres:password@localhost:5432/opspilot_test
+      SECRET_KEY: ci-test-secret-key-32-chars-long!!
       LOG_DIR: logs
 
     steps:
@@ -48,6 +48,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Install uv
         run: pip install uv
@@ -55,19 +56,23 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Run tests
-        run: uv run pytest tests/ -v --tb=short
+      - name: Run Alembic migrations
+        run: uv run alembic upgrade head
 
+      - name: Run tests
+        run: uv run pytest tests/ -v --tb=short -x
+
+  # Docker build check
   docker-build:
+    name: Docker build (main only)
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: test
     if: github.ref == 'refs/heads/main'
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
       - name: Build backend image
         uses: docker/build-push-action@v5
@@ -77,3 +82,46 @@ jobs:
           tags: ops-pilot-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Alembic migration check
+  migration-check:
+    name: Check for missing Alembic migrations
+    runs-on: ubuntu-latest
+    needs: test
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: opspilot_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_URL: postgresql+asyncpg://postgres:password@localhost:5432/opspilot_test
+      SECRET_KEY: ci-secret
+      OPENAI_API_KEY: dummy
+      OPENAI_BASE_URL: https://api.openai.com/v1
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install uv
+      - run: uv sync
+      - name: Apply migrations
+        run: uv run alembic upgrade head
+      - name: Check no pending autogenerate
+        run: |
+          uv run alembic check
+          echo "✓ No unapplied schema changes"
