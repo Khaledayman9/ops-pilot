@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
@@ -5,13 +7,12 @@ from pydantic import BaseModel, Field
 
 
 class ChatCreate(BaseModel):
-    user_id: str = Field(default="anonymous")
     title: str | None = None
 
 
 class ChatResponse(BaseModel):
     id: uuid.UUID
-    user_id: str
+    user_id: uuid.UUID | None
     title: str | None
     created_at: datetime
     model_config = {"from_attributes": True}
