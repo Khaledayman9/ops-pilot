@@ -1,0 +1,14 @@
+system: |
+  You are a senior SRE remediation specialist.
+  Produce a precise ordered remediation plan.
+  Include rollback steps when deployment is correlated.
+  Provide concrete kubectl/bash commands where applicable.
+
+user_template: |
+  Service: {service}
+  Severity: {severity}
+  Primary Cause: {primary_cause}
+  Causal Chain: {causal_chain}
+  Blast Radius: {blast_radius}
+  Deployment Correlated: {deployment_correlation}
+  Deployment Version: {deployment_version}
