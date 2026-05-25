@@ -1,8 +1,12 @@
 /**
- * API client — all HTTP + SSE calls to the backend.
- * Auth tokens are read from cookies (set by the auth module).
+ * API client with:
+ * - JWT token management (cookie-based)
+ * - Structured error propagation (backend errors surfaced exactly)
+ * - Zod input validation before requests
+ * - SSE streaming with guardrail-violation passthrough
  */
 import Cookies from "js-cookie";
+import { z } from "zod";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -12,17 +16,68 @@ export function getAccessToken(): string | undefined {
     return Cookies.get("access_token");
 }
 
-export function setTokens(access: string, refresh: string) {
-    Cookies.set("access_token", access, { sameSite: "strict", secure: false });
-    Cookies.set("refresh_token", refresh, { sameSite: "strict", secure: false });
+export function setTokens(access: string, refresh: string): void {
+    const opts = { sameSite: "strict" as const, secure: process.env.NODE_ENV === "production" };
+    Cookies.set("access_token", access, opts);
+    Cookies.set("refresh_token", refresh, opts);
 }
 
-export function clearTokens() {
+export function clearTokens(): void {
     Cookies.remove("access_token");
     Cookies.remove("refresh_token");
 }
 
-// ── Auth ───────────────────────────────────────────────────────────────────
+function authHeaders(): Record<string, string> {
+    const token = getAccessToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+// ── Error types ────────────────────────────────────────────────────────────
+
+export interface ApiError {
+    detail: string;
+    trace_id?: string;
+    path?: string;
+    code?: string;
+}
+
+export class ApiException extends Error {
+    status: number;
+    body: ApiError;
+
+    constructor(status: number, body: ApiError) {
+        super(body.detail);
+        this.status = status;
+        this.body = body;
+        this.name = "ApiException";
+    }
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+    if (res.ok) return res.json() as Promise<T>;
+    let body: ApiError;
+    try {
+        body = await res.json();
+    } catch {
+        body = { detail: res.statusText };
+    }
+    throw new ApiException(res.status, body);
+}
+
+// ── Auth schemas (Zod) ────────────────────────────────────────────────────
+
+const RegisterSchema = z.object({
+    email: z.string().email(),
+    username: z.string().min(3).max(64).regex(/^[a-zA-Z0-9_-]+$/),
+    password: z.string().min(8),
+});
+
+const LoginSchema = z.object({
+    email: z.string().email(),
+    password: z.string().min(1),
+});
+
+// ── Types ──────────────────────────────────────────────────────────────────
 
 export interface TokenResponse {
     access_token: string;
@@ -38,75 +93,11 @@ export interface UserPublic {
     is_verified: boolean;
 }
 
-export async function register(
-    email: string,
-    username: string,
-    password: string
-): Promise<UserPublic> {
-    const res = await fetch(`${API}/api/v1/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, username, password }),
-    });
-    if (!res.ok) throw new Error((await res.json()).detail ?? "Registration failed");
-    return res.json();
-}
-
-export async function login(email: string, password: string): Promise<TokenResponse> {
-    const res = await fetch(`${API}/api/v1/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) throw new Error((await res.json()).detail ?? "Login failed");
-    const tokens: TokenResponse = await res.json();
-    setTokens(tokens.access_token, tokens.refresh_token);
-    return tokens;
-}
-
-export async function getMe(): Promise<UserPublic> {
-    const token = getAccessToken();
-    const res = await fetch(`${API}/api/v1/auth/me`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error("Not authenticated");
-    return res.json();
-}
-
-// ── Auth header helper ──────────────────────────────────────────────────────
-
-function authHeaders(): Record<string, string> {
-    const token = getAccessToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-// ── Chat ───────────────────────────────────────────────────────────────────
-
 export interface ChatSession {
     id: string;
     title?: string;
     created_at: string;
 }
-
-export async function createChat(title?: string): Promise<ChatSession> {
-    const res = await fetch(`${API}/api/v1/chat/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ title }),
-    });
-    if (!res.ok) throw new Error("Failed to create chat");
-    return res.json();
-}
-
-export async function listChats(): Promise<ChatSession[]> {
-    const res = await fetch(`${API}/api/v1/chat/`, {
-        headers: authHeaders(),
-    });
-    if (!res.ok) return [];
-    return res.json();
-}
-
-// ── Streaming ──────────────────────────────────────────────────────────────
 
 export interface StreamEvent {
     event: string;
@@ -116,45 +107,129 @@ export interface StreamEvent {
     status?: string;
 }
 
+// ── Auth API ───────────────────────────────────────────────────────────────
+
+export async function register(
+    email: string,
+    username: string,
+    password: string,
+): Promise<UserPublic> {
+    const body = RegisterSchema.parse({ email, username, password });
+    const res = await fetch(`${API}/api/v1/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    return handleResponse<UserPublic>(res);
+}
+
+export async function login(email: string, password: string): Promise<TokenResponse> {
+    const body = LoginSchema.parse({ email, password });
+    const res = await fetch(`${API}/api/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    const tokens = await handleResponse<TokenResponse>(res);
+    setTokens(tokens.access_token, tokens.refresh_token);
+    return tokens;
+}
+
+export async function refreshTokens(): Promise<TokenResponse> {
+    const refreshToken = Cookies.get("refresh_token");
+    if (!refreshToken) throw new ApiException(401, { detail: "No refresh token" });
+    const res = await fetch(`${API}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    const tokens = await handleResponse<TokenResponse>(res);
+    setTokens(tokens.access_token, tokens.refresh_token);
+    return tokens;
+}
+
+export async function getMe(): Promise<UserPublic> {
+    const res = await fetch(`${API}/api/v1/auth/me`, {
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+    });
+    return handleResponse<UserPublic>(res);
+}
+
+export async function logout(): Promise<void> {
+    clearTokens();
+}
+
+// ── Chat API ───────────────────────────────────────────────────────────────
+
+export async function createChat(title?: string): Promise<ChatSession> {
+    const res = await fetch(`${API}/api/v1/chat/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ title }),
+    });
+    return handleResponse<ChatSession>(res);
+}
+
+export async function listChats(): Promise<ChatSession[]> {
+    const res = await fetch(`${API}/api/v1/chat/`, { headers: authHeaders() });
+    if (!res.ok) return [];
+    return res.json();
+}
+
+export async function deleteChat(sessionId: string): Promise<void> {
+    await fetch(`${API}/api/v1/chat/${sessionId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+    });
+}
+
+// ── SSE Streaming ──────────────────────────────────────────────────────────
+
 export function streamIncident(
     query: string,
     sessionId: string | null,
     onEvent: (e: StreamEvent) => void,
     onDone: (sessionId: string) => void,
-    onError: (err: Error) => void
+    onError: (err: Error | ApiException) => void,
 ): () => void {
     const params = new URLSearchParams({ query });
     if (sessionId) params.set("session_id", sessionId);
 
     const token = getAccessToken();
-    if (token) params.set("token", token); // SSE can't set headers; pass as param
+    if (token) params.set("token", token);
 
     const url = `${API}/api/v1/stream/incident?${params.toString()}`;
     const es = new EventSource(url);
 
-    const types = ["step", "graph", "reasoning", "result", "error", "session"];
+    const types = ["step", "graph", "reasoning", "result", "session"];
     types.forEach((t) => {
         es.addEventListener(t, (e: MessageEvent) => {
             try {
                 const parsed = JSON.parse(e.data);
                 onEvent({ ...parsed, event: t } as StreamEvent);
-            } catch {
-                /* ignore */
-            }
+            } catch { /* ignore */ }
         });
     });
 
-    es.addEventListener("done", (e: MessageEvent) => {
+    // Propagate backend errors (including guardrail violations) to UI
+    es.addEventListener("error_event", (e: MessageEvent) => {
         try {
-            onDone(JSON.parse(e.data).session_id);
+            const parsed = JSON.parse(e.data) as ApiError;
+            onError(new ApiException(422, parsed));
         } catch {
-            onDone("");
+            onError(new Error("Unknown stream error"));
         }
         es.close();
     });
 
+    es.addEventListener("done", (e: MessageEvent) => {
+        try { onDone(JSON.parse(e.data).session_id); }
+        catch { onDone(""); }
+        es.close();
+    });
+
     es.onerror = () => {
-        onError(new Error("SSE connection failed"));
+        onError(new ApiException(503, { detail: "SSE connection failed. Is the backend running?" }));
         es.close();
     };
 

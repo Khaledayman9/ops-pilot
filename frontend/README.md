@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ops-Pilot Frontend
 
-## Getting Started
+Next.js 14 + TypeScript + Tailwind + Framer Motion + React Flow + Zustand
 
-First, run the development server:
+## Setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+    npm install
+    cp .env.example .env.local
+    # .env.local: NEXT_PUBLIC_API_URL=http://localhost:8000
+    npm run dev
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Test
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+    npm test               # Jest unit tests
+    npm run test:coverage  # with coverage
+    npm run type-check     # TypeScript
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Pages
 
-## Learn More
+    /             Landing page — animated hero, pipeline diagram, CTA
+    /login        Sign in with email + password
+    /register     Create account
+    /chat         AI incident analysis — SSE streaming + React Flow graph
 
-To learn more about Next.js, take a look at the following resources:
+## API Client (app/lib/api.ts)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Zod validation before every request
+- ApiException class carries exact backend error (detail, trace_id, path)
+- Login/register errors surface the backend's exact error message
+- Guardrail violations from SSE stream propagated to UI as ApiException
+- Token rotation: access token in cookie, refresh token in cookie
+- authHeaders() helper adds Bearer token to all authenticated requests
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Error Propagation
 
-## Deploy on Vercel
+Backend errors are propagated exactly to the UI:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+    Backend returns:
+    { "detail": "Email or username already registered.", "trace_id": "abc-123" }
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+    UI catches:
+    ApiException { status: 409, body: { detail: "...", trace_id: "..." } }
+    → displayed in error banner with exact backend message
+
+## Environment
+
+    NEXT_PUBLIC_API_URL   Backend URL (default: http://localhost:8000)
