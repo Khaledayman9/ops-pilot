@@ -8,6 +8,8 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agents.orchestrator.graph import IncidentOrchestrator
 from app.api.deps import get_optional_user
+from app.api.uris import StreamURIs
+from app.core.guardrails import GuardrailViolation, apply_all as apply_guardrails
 from app.db.models import User
 from app.db.postgres import get_db
 from app.schemas.chat import ChatCreate, MessageCreate
@@ -19,36 +21,47 @@ _orchestrator = IncidentOrchestrator()
 
 
 @router.get(
-    "/incident",
+    StreamURIs.INCIDENT,
     summary="Stream incident analysis via Server-Sent Events",
     description=(
-        "Opens an SSE connection and streams each agent step as it executes. "
-        "Pass `session_id` to resume an existing chat, or omit to create a new one. "
-        "Authentication is optional — unauthenticated requests use an anonymous session."
+        "Opens an SSE connection that emits agent steps in real time. "
+        "Each event has an 'event' type: step | graph | reasoning | result | error | done."
     ),
 )
 async def stream_incident(
-    query: str = Query(..., description="Incident description"),
-    session_id: str | None = Query(
-        None, description="Existing session UUID (optional)"
-    ),
+    query: str = Query(..., description="Raw incident description"),
+    session_id: str | None = Query(None, description="Existing session UUID"),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> EventSourceResponse:
+    # Apply guardrails before any processing
+    try:
+        safe_query = apply_guardrails(query)
+    except GuardrailViolation as e:
+        error_detail = str(e)
+
+        async def _error_gen():
+            yield {
+                "event": "error",
+                "data": json.dumps({"detail": error_detail, "code": "GUARDRAIL_VIOLATION"}),
+            }
+
+        return EventSourceResponse(_error_gen())
+
     chat_svc = ChatService(db)
     user_id = current_user.id if current_user else None
 
     if not session_id:
-        chat = await chat_svc.create_chat(ChatCreate(title=query[:80]), user_id=user_id)
+        chat = await chat_svc.create_chat(ChatCreate(title=safe_query[:80]), user_id=user_id)
         session_id = str(chat.id)
 
-    await chat_svc.add_message(session_id, MessageCreate(role="user", content=query))
+    await chat_svc.add_message(session_id, MessageCreate(role="user", content=safe_query))
 
     async def generator():
         yield {"event": "session", "data": json.dumps({"session_id": session_id})}
 
         result_parts: list[str] = []
-        async for event in _orchestrator.run_with_stream(query, session_id):
+        async for event in _orchestrator.run_with_stream(safe_query, session_id):
             yield {"event": event.event, "data": json.dumps(event.model_dump())}
             await chat_svc.record_execution(
                 session_id,

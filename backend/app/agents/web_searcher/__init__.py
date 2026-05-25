@@ -1,6 +1,6 @@
 from .agent import WebSearcherAgent
-from .models import WebSearchInput, WebSearchOutput, SearchResult
-from .utils import web_search, search_to_text
+from .models import SearchResult, WebSearchInput, WebSearchOutput
+from .utils import search_to_text, web_search
 
 __all__ = [
     "WebSearcherAgent",

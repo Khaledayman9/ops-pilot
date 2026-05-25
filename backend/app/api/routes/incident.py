@@ -4,18 +4,19 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.api.dtos import IncidentRequest, IncidentResponse
+from app.api.uris import IncidentURIs
 from app.db.models import User
 from app.db.postgres import get_db
-from app.schemas.incident import IncidentRequest, IncidentResponse
 from app.services.incident_service import IncidentService
 
 router = APIRouter()
 
 
 @router.post(
-    "/analyze",
+    IncidentURIs.ANALYZE,
     response_model=IncidentResponse,
-    summary="Run synchronous incident analysis (non-streaming)",
+    summary="Run synchronous full-pipeline incident analysis",
 )
 async def analyze_incident(
     request: IncidentRequest,

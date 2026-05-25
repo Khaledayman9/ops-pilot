@@ -23,11 +23,11 @@ from app.agents.root_cause_finder import (
     RootCauseFinderInput,
     RootCauseFinderOutput,
 )
-from app.agents.searcher import (
+from app.agents.entity_extractor import (
     EntityExtraction,
-    SearcherAgent,
-    SearchInput,
-    SearchOutput,
+    EntityExtractorAgent,
+    EntityExtractorInput,
+    EntityExtractorOutput,
 )
 from app.agents.web_searcher import (
     WebSearcherAgent,
@@ -40,33 +40,40 @@ from app.agents.web_searcher import (
 from app.agents.crew import IncidentAnalysisCrew, WebSearchTool
 
 __all__ = [
+    # Classifier
     "ClassifierAgent",
     "ClassificationInput",
     "ClassificationOutput",
-    "SearcherAgent",
-    "SearchInput",
-    "SearchOutput",
+    # Entity extractor
+    "EntityExtractorAgent",
+    "EntityExtractorInput",
+    "EntityExtractorOutput",
     "EntityExtraction",
+    # Graph analyzer
     "GraphAnalyzerAgent",
     "GraphAnalyzerQueryInput",
     "GraphAnalyzerQueryOutput",
     "DependencyEdge",
     "ServiceNode",
+    # Root cause finder
     "RootCauseFinderAgent",
     "RootCauseFinderInput",
     "RootCauseFinderOutput",
     "CausalFactor",
+    # Remediator
     "RemediatorAgent",
     "RemediatorInput",
     "RemediatorOutput",
     "EscalationPath",
     "RemediationStep",
+    # Web searcher
     "WebSearcherAgent",
     "WebSearchInput",
     "WebSearchOutput",
     "SearchResult",
     "web_search",
     "search_to_text",
+    # Crew
     "IncidentAnalysisCrew",
     "WebSearchTool",
 ]

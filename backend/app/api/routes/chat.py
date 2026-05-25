@@ -6,19 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.api.dtos import ChatCreate, ChatResponse, MessageResponse
+from app.api.uris import ChatURIs
 from app.db.models import User
 from app.db.postgres import get_db
-from app.schemas.chat import ChatCreate, ChatResponse, MessageResponse
 from app.services.chat_service import ChatService
 
 router = APIRouter()
 
 
 @router.post(
-    "/",
-    response_model=ChatResponse,
-    status_code=201,
-    summary="Create a new chat session",
+    ChatURIs.ROOT, response_model=ChatResponse, status_code=201, summary="Create a new chat session"
 )
 async def create_chat(
     payload: ChatCreate,
@@ -28,7 +26,7 @@ async def create_chat(
     return await ChatService(db).create_chat(payload, user_id=current_user.id)
 
 
-@router.get("/", response_model=list[ChatResponse], summary="List my chat sessions")
+@router.get(ChatURIs.ROOT, response_model=list[ChatResponse], summary="List my chat sessions")
 async def list_chats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -36,7 +34,7 @@ async def list_chats(
     return await ChatService(db).list_chats(user_id=current_user.id)
 
 
-@router.get("/{session_id}", response_model=ChatResponse, summary="Get a chat session")
+@router.get(ChatURIs.SESSION, response_model=ChatResponse, summary="Get a specific chat session")
 async def get_chat(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -44,16 +42,12 @@ async def get_chat(
 ) -> ChatResponse:
     chat = await ChatService(db).get_chat(str(session_id), user_id=current_user.id)
     if not chat:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
     return chat
 
 
 @router.get(
-    "/{session_id}/messages",
-    response_model=list[MessageResponse],
-    summary="Get all messages in a session",
+    ChatURIs.MESSAGES, response_model=list[MessageResponse], summary="Get all messages in a session"
 )
 async def get_messages(
     session_id: uuid.UUID,
@@ -63,11 +57,7 @@ async def get_messages(
     return await ChatService(db).get_messages(str(session_id))
 
 
-@router.get(
-    "/{session_id}/executions",
-    response_model=list[dict],
-    summary="Get agent execution trace for a session",
-)
+@router.get(ChatURIs.EXECUTIONS, response_model=list[dict], summary="Get agent execution trace")
 async def get_executions(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -77,9 +67,7 @@ async def get_executions(
 
 
 @router.delete(
-    "/{session_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a chat session",
+    ChatURIs.SESSION, status_code=status.HTTP_204_NO_CONTENT, summary="Delete a chat session"
 )
 async def delete_chat(
     session_id: uuid.UUID,

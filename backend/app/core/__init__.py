@@ -1,4 +1,4 @@
-from app.core.llm import llm
+from app.core.llm import llm, get_llm
 from app.core.utils import (
     build_neo4j_hints,
     format_prompt,
@@ -12,9 +12,12 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
 )
+from app.core.base_agent import BaseAgent
+from app.core.guardrails import apply_all as apply_guardrails, GuardrailViolation
 
 __all__ = [
     "llm",
+    "get_llm",
     "load_prompt",
     "format_prompt",
     "build_neo4j_hints",
@@ -24,4 +27,7 @@ __all__ = [
     "create_access_token",
     "create_refresh_token",
     "decode_token",
+    "apply_guardrails",
+    "GuardrailViolation",
+    "BaseAgent",
 ]

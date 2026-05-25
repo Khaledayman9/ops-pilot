@@ -1,8 +1,7 @@
+import pytest
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from app.agents.orchestrator.graph import IncidentOrchestrator
-from app.schemas.stream import StreamEvent
 
 
 @pytest.mark.asyncio
@@ -13,101 +12,47 @@ async def test_orchestrator_streams_all_steps(
     mock_root_cause,
     mock_remediation,
 ):
-    orchestrator = IncidentOrchestrator()
-
+    o = IncidentOrchestrator()
     with (
         patch.object(
-            orchestrator._classifier,
-            "run",
-            new_callable=AsyncMock,
-            return_value=mock_classification,
+            o._classifier, "run", new_callable=AsyncMock, return_value=mock_classification
         ),
+        patch.object(o._extractor, "run", new_callable=AsyncMock, return_value=mock_search_output),
+        patch.object(o._graph, "run", new_callable=AsyncMock, return_value=mock_graph_output),
         patch.object(
-            orchestrator._searcher,
+            o._web_searcher,
             "run",
             new_callable=AsyncMock,
-            return_value=mock_search_output,
+            return_value=type("WO", (), {"combined_context": "ctx", "results": []})(),
         ),
-        patch.object(
-            orchestrator._graph_agent,
-            "run",
-            new_callable=AsyncMock,
-            return_value=mock_graph_output,
-        ),
-        patch.object(
-            orchestrator._root_cause,
-            "run",
-            new_callable=AsyncMock,
-            return_value=mock_root_cause,
-        ),
-        patch.object(
-            orchestrator._remediation,
-            "run",
-            new_callable=AsyncMock,
-            return_value=mock_remediation,
-        ),
+        patch.object(o._crew, "run", new_callable=AsyncMock, return_value="crew report"),
+        patch.object(o._root_cause, "run", new_callable=AsyncMock, return_value=mock_root_cause),
+        patch.object(o._remediator, "run", new_callable=AsyncMock, return_value=mock_remediation),
     ):
-        events: list[StreamEvent] = []
-        async for event in orchestrator.run_with_stream(
-            "Checkout service is slow", "test-session"
-        ):
-            events.append(event)
+        events = [e async for e in o.run_with_stream("Checkout slow", "test-session")]
 
-    event_types = [e.event for e in events]
-    assert "step" in event_types
-    assert "result" in event_types
-
-    result_event = next(e for e in events if e.event == "result")
-    assert result_event.data is not None
-    assert "session_id" in result_event.data
-    assert "root_cause" in result_event.data
-    assert "remediation_steps" in result_event.data
+    assert any(e.event == "result" for e in events)
+    result = next(e for e in events if e.event == "result")
+    assert "root_cause" in result.data
+    assert "remediation_steps" in result.data
+    assert "graph_context" in result.data
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_handles_agent_errors(mock_classification):
-    orchestrator = IncidentOrchestrator()
-
+    o = IncidentOrchestrator()
     with (
         patch.object(
-            orchestrator._classifier,
-            "run",
-            new_callable=AsyncMock,
-            return_value=mock_classification,
+            o._classifier, "run", new_callable=AsyncMock, return_value=mock_classification
         ),
-        patch.object(
-            orchestrator._searcher,
-            "run",
-            new_callable=AsyncMock,
-            side_effect=Exception("Searcher crashed"),
-        ),
-        patch.object(
-            orchestrator._graph_agent,
-            "run",
-            new_callable=AsyncMock,
-            side_effect=Exception("Graph unreachable"),
-        ),
-        patch.object(
-            orchestrator._root_cause,
-            "run",
-            new_callable=AsyncMock,
-            side_effect=Exception("RCA failed"),
-        ),
-        patch.object(
-            orchestrator._remediation,
-            "run",
-            new_callable=AsyncMock,
-            side_effect=Exception("Remediation failed"),
-        ),
+        patch.object(o._extractor, "run", new_callable=AsyncMock, side_effect=Exception("boom")),
+        patch.object(o._graph, "run", new_callable=AsyncMock, side_effect=Exception("boom")),
+        patch.object(o._web_searcher, "run", new_callable=AsyncMock, side_effect=Exception("boom")),
+        patch.object(o._crew, "run", new_callable=AsyncMock, side_effect=Exception("boom")),
+        patch.object(o._root_cause, "run", new_callable=AsyncMock, side_effect=Exception("boom")),
+        patch.object(o._remediator, "run", new_callable=AsyncMock, side_effect=Exception("boom")),
     ):
-        events: list[StreamEvent] = []
-        async for event in orchestrator.run_with_stream(
-            "Test incident", "test-session"
-        ):
-            events.append(event)
+        events = [e async for e in o.run_with_stream("Test", "test-session")]
 
-    result_events = [e for e in events if e.event == "result"]
-    assert len(result_events) == 1
-
-    error_events = [e for e in events if e.status == "error"]
-    assert len(error_events) > 0
+    assert sum(1 for e in events if e.event == "result") == 1
+    assert any(e.status == "error" for e in events)

@@ -1,22 +1,37 @@
+"""
+LangGraph-style incident orchestrator.
+
+Pipeline (7 steps):
+  1. ClassifierAgent       — classify service, severity, type
+  2. EntityExtractorAgent  — extract entities (formerly SearcherAgent)
+  3. GraphAnalyzerAgent    — deep Neo4j traversal
+  4. WebSearcherAgent      — DuckDuckGo web intelligence
+  5. IncidentAnalysisCrew  — CrewAI 2-agent enrichment
+  6. RootCauseFinderAgent  — structured RCA
+  7. RemediatorAgent       — ordered remediation plan
+"""
+
+from __future__ import annotations
+
 from collections.abc import AsyncGenerator
 
 from app.schemas.stream import StreamEvent
 from logger import logger
 
 from ..classifier import ClassificationInput, ClassifierAgent
+from ..crew.incident_crew import IncidentAnalysisCrew
 from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
 from ..remediator import RemediatorAgent, RemediatorInput
 from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
-from ..searcher import SearcherAgent, SearchInput
+from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
-from ..crew.incident_crew import IncidentAnalysisCrew
 from .models import IncidentState
 
 
 class IncidentOrchestrator:
     def __init__(self) -> None:
         self._classifier = ClassifierAgent()
-        self._searcher = SearcherAgent()
+        self._extractor = EntityExtractorAgent()
         self._graph = GraphAnalyzerAgent()
         self._web_searcher = WebSearcherAgent()
         self._crew = IncidentAnalysisCrew()
@@ -28,7 +43,7 @@ class IncidentOrchestrator:
     ) -> AsyncGenerator[StreamEvent, None]:
         state = IncidentState(query=query, session_id=session_id)
 
-        # Classify
+        # 1. Classify
         yield StreamEvent(
             event="step",
             agent="classifier",
@@ -63,17 +78,17 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # Entity extraction
+        # 2. Entity extraction
         yield StreamEvent(
             event="step",
-            agent="searcher",
+            agent="entity_extractor",
             step="entity_extraction",
             status="running",
             data={"message": "Extracting entities…"},
         )
         try:
-            out = await self._searcher.run(
-                SearchInput(
+            out = await self._extractor.run(
+                EntityExtractorInput(
                     query=query,
                     service=state.service or "unknown",
                     incident_type=state.incident_type or "unknown",
@@ -83,29 +98,29 @@ class IncidentOrchestrator:
             state.completed_steps.append("entity_extraction")
             yield StreamEvent(
                 event="step",
-                agent="searcher",
+                agent="entity_extractor",
                 step="entity_extraction",
                 status="complete",
                 data=state.entities,
             )
         except Exception as exc:
-            logger.error(f"[Orchestrator] Searcher: {exc}")
+            logger.error(f"[Orchestrator] EntityExtractor: {exc}")
             state.errors.append(str(exc))
             yield StreamEvent(
                 event="step",
-                agent="searcher",
+                agent="entity_extractor",
                 step="entity_extraction",
                 status="error",
                 data={"error": str(exc)},
             )
 
-        # Graph traversal
+        # 3. Deep graph traversal
         yield StreamEvent(
             event="step",
             agent="graph_analyzer",
             step="graph_traversal",
             status="running",
-            data={"message": "Traversing dependency graph…"},
+            data={"message": "Deep Neo4j graph traversal…"},
         )
         try:
             out = await self._graph.run(
@@ -135,7 +150,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # Web intelligence (WebSearcherAgent)
+        # 4. Web intelligence
         yield StreamEvent(
             event="step",
             agent="web_searcher",
@@ -158,10 +173,7 @@ class IncidentOrchestrator:
                 agent="web_searcher",
                 step="web_search",
                 status="complete",
-                data={
-                    "results_count": len(web_out.results),
-                    "context": web_context[:400],
-                },
+                data={"results_count": len(web_out.results), "context": web_context[:400]},
             )
         except Exception as exc:
             logger.warning(f"[Orchestrator] WebSearcher: {exc}")
@@ -174,7 +186,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # CrewAI enrichment
+        # 5. CrewAI enrichment
         yield StreamEvent(
             event="step",
             agent="crew",
@@ -190,10 +202,7 @@ class IncidentOrchestrator:
                 deployment_version=state.deployment_version,
                 graph_summary=state.graph_context.get("graph_summary", ""),
             )
-            # Append crew report to web context
-            web_context = (
-                f"{web_context}\n\n=== CrewAI Intelligence Report ===\n{crew_report}"
-            )
+            web_context = f"{web_context}\n\n=== CrewAI Intelligence Report ===\n{crew_report}"
             state.completed_steps.append("crew_enrichment")
             yield StreamEvent(
                 event="step",
@@ -213,7 +222,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # Root cause analysis
+        # 6. Root cause analysis
         yield StreamEvent(
             event="step",
             agent="root_cause_finder",
@@ -257,7 +266,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # Remediation
+        # 7. Remediation
         yield StreamEvent(
             event="step",
             agent="remediator",

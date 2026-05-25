@@ -1,12 +1,8 @@
 """
 FastAPI application factory.
 
-Route structure (all under /api/v1):
-    /health
-    /api/v1/auth/*
-    /api/v1/incident/*
-    /api/v1/chat/*
-    /api/v1/stream/*
+Mounts the single aggregated router from app/api/__init__.py.
+All business logic lives in services; routes are thin.
 """
 
 from __future__ import annotations
@@ -25,7 +21,10 @@ from settings import settings
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Ops-Pilot",
-        description="AI-powered DevOps Incident Response & Root Cause Analysis",
+        description=(
+            "AI-powered multi-agent DevOps incident response platform. "
+            "5 agents → Neo4j graph traversal → root cause → remediation."
+        ),
         version="0.1.0",
         docs_url="/docs",
         redoc_url="/redoc",
@@ -50,15 +49,24 @@ def create_app() -> FastAPI:
         response.headers["X-Trace-ID"] = trace_id
         return response
 
-    # Global error handler
+    # Global exception handler
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
-        logger.error(f"Unhandled exception on {request.url.path}: {exc}", exc_info=True)
+        trace_id = getattr(request.state, "trace_id", "unknown")
+        logger.error(
+            f"[{trace_id}] Unhandled exception on {request.url.path}: {exc}",
+            exc_info=True,
+        )
         return JSONResponse(
-            status_code=500, content={"detail": "Internal server error"}
+            status_code=500,
+            content={
+                "detail": "Internal server error",
+                "trace_id": trace_id,
+                "path": str(request.url.path),
+            },
         )
 
-    # Mount routers
+    # Routers
     app.include_router(api_router)
 
     return app

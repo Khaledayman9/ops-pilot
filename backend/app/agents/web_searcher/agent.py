@@ -1,26 +1,20 @@
-"""
-WebSearcherAgent — enriches incident context with real-time web intelligence.
-
-Uses DuckDuckGo (no API key required) via two strategies:
-  1. Instant Answer JSON API
-  2. HTML endpoint scrape fallback
-
-The raw results are then synthesised by the LLM into structured supplementary
-context consumed by the RootCauseFinderAgent.
-"""
-
 from __future__ import annotations
+
+from app.core import BaseAgent, format_prompt
 
 from .models import WebSearchInput, WebSearchOutput
 from .utils import search_to_text, web_search
-from app.core import llm, format_prompt, load_prompt
-from logger import logger
 
 
-class WebSearcherAgent:
-    def __init__(self) -> None:
-        self._llm = llm.with_structured_output(WebSearchOutput)
-        self._prompts = load_prompt("web_searcher")
+class WebSearcherAgent(BaseAgent):
+    """
+    Enriches incident context with real-time DuckDuckGo web intelligence.
+    Two strategies: Instant Answer API → HTML scrape fallback.
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__("web_searcher", **kwargs)
+        self._chain = self._build_chain(WebSearchOutput)
 
     async def run(
         self,
@@ -30,9 +24,8 @@ class WebSearcherAgent:
         incident_type: str = "unknown",
         deployment_version: str | None = None,
     ) -> WebSearchOutput:
-        logger.info(f"[WebSearcherAgent] Searching for: {inp.query}")
+        self._log(f"Searching for: {inp.query}")
 
-        # Build targeted queries
         queries = [
             inp.query,
             f"{service} {incident_type} bug",
@@ -45,7 +38,6 @@ class WebSearcherAgent:
         for q in queries[: inp.max_results]:
             all_results.extend(web_search(q, max_results=3))
 
-        # Deduplicate by url
         seen: set[str] = set()
         unique = []
         for r in all_results:
@@ -54,7 +46,7 @@ class WebSearcherAgent:
                 unique.append(r)
 
         search_context = search_to_text(unique) if unique else "No results found."
-        logger.info(f"[WebSearcherAgent] Found {len(unique)} unique results")
+        self._log(f"Found {len(unique)} unique results")
 
         user_msg = format_prompt(
             self._prompts["user_template"],
@@ -65,7 +57,7 @@ class WebSearcherAgent:
             search_context=search_context,
         )
 
-        result: WebSearchOutput = await self._llm.ainvoke(
+        result: WebSearchOutput = await self._chain.ainvoke(
             [
                 ("system", self._prompts["system"]),
                 ("human", user_msg),

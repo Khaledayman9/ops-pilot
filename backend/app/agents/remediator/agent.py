@@ -1,21 +1,15 @@
-from __future__ import annotations
-
-from app.core.llm import llm, format_prompt, load_prompt
-from logger import logger
+from app.core import BaseAgent, format_prompt
 
 from .models import RemediatorInput, RemediatorOutput
 
 
-class RemediatorAgent:
-    def __init__(self) -> None:
-        self._llm = llm.with_structured_output(RemediatorOutput)
-        self._prompts = load_prompt("remediator")
+class RemediatorAgent(BaseAgent):
+    def __init__(self, **kwargs) -> None:
+        super().__init__("remediator", **kwargs)
+        self._chain = self._build_chain(RemediatorOutput)
 
     async def run(self, inp: RemediatorInput) -> RemediatorOutput:
-        logger.info(
-            f"[RemediatorAgent] Remediating {inp.service} "
-            f"cause={inp.primary_cause[:50]}"
-        )
+        self._log(f"Remediating {inp.service} cause={inp.primary_cause[:50]}")
         user_msg = format_prompt(
             self._prompts["user_template"],
             service=inp.service,
@@ -30,8 +24,6 @@ class RemediatorAgent:
             ("system", self._prompts["system"]),
             ("human", user_msg),
         ]
-        result: RemediatorOutput = await self._llm.ainvoke(messages)
-        logger.info(
-            f"[RemediatorAgent] {len(result.immediate_actions)} immediate actions"
-        )
+        result: RemediatorOutput = await self._chain.ainvoke(messages)
+        self._log(f"{len(result.immediate_actions)} immediate actions generated")
         return result

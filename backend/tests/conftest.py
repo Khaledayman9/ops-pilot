@@ -1,13 +1,14 @@
 import pytest
 from app.agents import (
-    CausalFactor,
     ClassificationOutput,
     EntityExtraction,
-    EscalationPath,
+    EntityExtractorOutput,
     GraphAnalyzerQueryOutput,
-    RemediationStep,
+    CausalFactor,
     RootCauseFinderOutput,
-    SearchOutput,
+    EscalationPath,
+    RemediationStep,
+    RemediatorOutput,
 )
 
 
@@ -25,7 +26,7 @@ def mock_classification():
 
 @pytest.fixture
 def mock_search_output():
-    return SearchOutput(
+    return EntityExtractorOutput(
         entities=EntityExtraction(
             services=["checkout-service", "payment-service"],
             deployments=["v2.3.1"],
@@ -84,7 +85,7 @@ def mock_root_cause():
 
 @pytest.fixture
 def mock_remediation():
-    return RemediationStep(
+    return RemediatorOutput(
         immediate_actions=[
             RemediationStep(
                 order=1,
@@ -117,10 +118,8 @@ def mock_remediation():
         ],
         escalation_paths=[
             EscalationPath(
-                team="checkout-team",
-                contact="#checkout-squad",
-                condition="Not resolved in 15min",
-            )
+                team="checkout-team", contact="#checkout-squad", condition="Not resolved in 15min"
+            ),
         ],
         runbook_references=["https://wiki.internal/runbooks/checkout-rollback"],
         estimated_resolution_minutes=20,

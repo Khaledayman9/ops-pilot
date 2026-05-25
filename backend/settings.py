@@ -1,32 +1,59 @@
+from __future__ import annotations
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # LLM
-    OPENAI_API_KEY: str
-    OPENAI_BASE_URL: str
-    OPENAI_MODEL: str = "gpt-4o"
-    GOOGLE_API_KEY: str = ""
+    # ── LLM provider selection ────────────────────────────────────────────────
+    # Choices: "openai" | "anthropic" | "google"
+    LLM_PROVIDER: str = "openai"
+    LLM_MODEL: str = "gpt-4o"
+    LLM_TEMPERATURE: float = 0.0
+    LLM_STREAMING: bool = True
+    LLM_MAX_RETRIES: int = 3
 
-    # Logging
+    # OpenAI / Azure-compatible
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o"
+
+    # Anthropic
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
+
+    # Google Generative AI
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_MODEL: str = "gemini-1.5-pro"
+
+    # ── Logging ───────────────────────────────────────────────────────────────
     LOG_DIR: str = "logs"
 
-    # Neo4j
+    # ── Neo4j ─────────────────────────────────────────────────────────────────
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USERNAME: str = "neo4j"
     NEO4J_PASSWORD: str = "password"
 
-    # PostgreSQL
+    # ── PostgreSQL ────────────────────────────────────────────────────────────
     POSTGRES_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/opspilot"
 
-    # Auth / JWT
+    # ── Redis / Celery ────────────────────────────────────────────────────────
+    REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+
+    # ── Auth / JWT ────────────────────────────────────────────────────────────
     SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS – comma-separated allowed origins
+    # ── CORS ──────────────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+
+    # ── Security / Guardrails ─────────────────────────────────────────────────
+    ENABLE_PII_SCRUBBING: bool = True
+    ENABLE_PROMPT_INJECTION_PROTECTION: bool = True
+    MAX_QUERY_LENGTH: int = 4000
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False

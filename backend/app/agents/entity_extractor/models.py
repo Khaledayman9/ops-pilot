@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 
 
-class SearchInput(BaseModel):
+class EntityExtractorInput(BaseModel):
     query: str
     service: str
     incident_type: str
@@ -16,7 +16,7 @@ class EntityExtraction(BaseModel):
     keywords: list[str] = Field(default_factory=list)
 
 
-class SearchOutput(BaseModel):
+class EntityExtractorOutput(BaseModel):
     entities: EntityExtraction
     search_queries: list[str] = Field(default_factory=list)
     context_summary: str
