@@ -2,6 +2,7 @@
 Seed Neo4j with a sample microservices infrastructure graph.
 Run: uv run python -m app.db.neo4j_seed
 """
+
 import asyncio
 
 from app.db.neo4j import neo4j_driver

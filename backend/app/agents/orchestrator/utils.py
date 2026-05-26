@@ -1,5 +1,6 @@
 from .models import IncidentState
 
+
 def should_skip_graph(state: IncidentState) -> bool:
     """Skip graph traversal if no service was classified."""
     return state.service is None

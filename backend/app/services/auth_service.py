@@ -32,9 +32,7 @@ class AuthService:
     async def register(self, payload: UserCreate) -> UserPublic:
         # Uniqueness check
         existing = await self._db.execute(
-            select(User).where(
-                (User.email == payload.email) | (User.username == payload.username)
-            )
+            select(User).where((User.email == payload.email) | (User.username == payload.username))
         )
         if existing.scalar_one_or_none():
             raise HTTPException(

@@ -21,9 +21,7 @@ async def test_register_endpoint():
     with patch("app.api.routes.auth.AuthService") as MockSvc:
         instance = MockSvc.return_value
         instance.register = AsyncMock(return_value=mock_user)
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as c:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.post(
                 "/api/v1/auth/register",
                 json={
@@ -45,9 +43,7 @@ async def test_login_endpoint():
     with patch("app.api.routes.auth.AuthService") as MockSvc:
         instance = MockSvc.return_value
         instance.login = AsyncMock(return_value=mock_tokens)
-        async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test"
-        ) as c:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
             r = await c.post(
                 "/api/v1/auth/login",
                 json={"email": "test@example.com", "password": "secret123"},
@@ -58,9 +54,7 @@ async def test_login_endpoint():
 
 @pytest.mark.asyncio
 async def test_health_endpoint():
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         r = await c.get("/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"

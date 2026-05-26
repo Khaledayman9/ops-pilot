@@ -48,9 +48,7 @@ def web_search(
             "skip_disambig": "1",
         }
         headers = {"User-Agent": "Mozilla/5.0 ops-pilot/1.0"}
-        with httpx.Client(
-            timeout=timeout, follow_redirects=True, headers=headers
-        ) as client:
+        with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
             r = client.get("https://api.duckduckgo.com/", params=params)
             data = r.json()
 
@@ -72,11 +70,7 @@ def web_search(
             if text and len(text) > 20:
                 results.append(
                     SearchResult(
-                        title=(
-                            first_url.split("/")[-1].replace("_", " ")
-                            if first_url
-                            else query
-                        ),
+                        title=(first_url.split("/")[-1].replace("_", " ") if first_url else query),
                         snippet=text,
                         url=first_url,
                     )
@@ -108,9 +102,7 @@ def web_search(
                 ),
                 "Accept": "text/html",
             }
-            with httpx.Client(
-                timeout=timeout, follow_redirects=True, headers=headers
-            ) as client:
+            with httpx.Client(timeout=timeout, follow_redirects=True, headers=headers) as client:
                 r = client.post(
                     "https://html.duckduckgo.com/html/",
                     data={"q": query},

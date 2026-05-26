@@ -11,9 +11,7 @@ from functools import lru_cache
 import yaml
 
 
-# ─── Prompt loading ──────────────────────────────────────────────────────────
-
-
+# Prompt loading
 @lru_cache(maxsize=64)
 def load_prompt(agent_name: str) -> dict[str, str]:
     """
@@ -35,9 +33,7 @@ def load_prompt(agent_name: str) -> dict[str, str]:
     prompt_path = os.path.join(base_dir, "agents", agent_name, "prompts.yaml")
 
     if not os.path.exists(prompt_path):
-        raise FileNotFoundError(
-            f"Prompt file not found for agent '{agent_name}': {prompt_path}"
-        )
+        raise FileNotFoundError(f"Prompt file not found for agent '{agent_name}': {prompt_path}")
 
     with open(prompt_path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
@@ -68,9 +64,7 @@ def format_prompt(template: str, **kwargs: object) -> str:
         raise ValueError(f"Missing prompt variable: {exc}") from exc
 
 
-# ─── Neo4j helpers (shared across graph_analyzer, searcher, …) ───────────────
-
-
+# Neo4j helpers
 def build_neo4j_hints(service: str, entities: list[str]) -> list[str]:
     """
     Build a list of Cypher query *hints* for a service and its related entities.

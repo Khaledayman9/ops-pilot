@@ -32,17 +32,13 @@ class ChatService:
         session_id: str,
         user_id: _uuid.UUID | None = None,
     ) -> ChatResponse | None:
-        result = await self._db.execute(
-            select(Chat).where(Chat.id == _uuid.UUID(session_id))
-        )
+        result = await self._db.execute(select(Chat).where(Chat.id == _uuid.UUID(session_id)))
         chat = result.scalar_one_or_none()
         if not chat:
             return None
         # Ownership check — only if user_id provided
         if user_id and chat.user_id and chat.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return ChatResponse.model_validate(chat)
 
     async def list_chats(self, user_id: _uuid.UUID) -> list[ChatResponse]:
@@ -52,24 +48,16 @@ class ChatService:
         return [ChatResponse.model_validate(c) for c in result.scalars().all()]
 
     async def delete_chat(self, session_id: str, user_id: _uuid.UUID) -> None:
-        result = await self._db.execute(
-            select(Chat).where(Chat.id == _uuid.UUID(session_id))
-        )
+        result = await self._db.execute(select(Chat).where(Chat.id == _uuid.UUID(session_id)))
         chat = result.scalar_one_or_none()
         if not chat:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat not found")
         if chat.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         await self._db.delete(chat)
         await self._db.commit()
 
-    async def add_message(
-        self, session_id: str, payload: MessageCreate
-    ) -> MessageResponse:
+    async def add_message(self, session_id: str, payload: MessageCreate) -> MessageResponse:
         msg = Message(
             chat_id=_uuid.UUID(session_id),
             role=payload.role,

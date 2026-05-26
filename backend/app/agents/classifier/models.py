@@ -13,7 +13,5 @@ class ClassificationOutput(BaseModel):
         description="Type: latency | error_rate | outage | degradation | deployment",
     )
     affected_components: list[str] = Field(default_factory=list)
-    trigger_event: str | None = Field(
-        None, description="e.g. deployment, config change"
-    )
+    trigger_event: str | None = Field(None, description="e.g. deployment, config change")
     confidence: float = Field(..., ge=0.0, le=1.0)

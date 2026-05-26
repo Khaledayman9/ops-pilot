@@ -17,7 +17,5 @@ class WebSearchInput(BaseModel):
 
 class WebSearchOutput(BaseModel):
     results: list[SearchResult]
-    combined_context: str = Field(
-        description="Flattened text of all results for LLM ingestion"
-    )
+    combined_context: str = Field(description="Flattened text of all results for LLM ingestion")
     queries_used: list[str]
