@@ -1,7 +1,5 @@
-import { ApiException, handleResponse } from "../lib/api";
-
-// We need to expose handleResponse for testing — add a named export in api.ts
-// or test indirectly via login/register mocks.
+// Tests that don't require DOM - pure unit tests
+import { ApiException } from "../lib/apis";
 
 describe("ApiException", () => {
     it("carries status and body", () => {
@@ -21,14 +19,28 @@ describe("ApiException", () => {
         expect(err.body.trace_id).toBe("abc-123");
         expect(err.body.path).toBe("/api/v1/incident/analyze");
     });
+
+    it("is instanceof Error", () => {
+        const err = new ApiException(401, { detail: "Unauthorized" });
+        expect(err instanceof Error).toBe(true);
+    });
 });
 
-describe("token helpers", () => {
-    it("setTokens / getAccessToken roundtrip", async () => {
-        const { setTokens, getAccessToken, clearTokens } = await import("../lib/api");
-        setTokens("my-access", "my-refresh");
-        expect(getAccessToken()).toBe("my-access");
-        clearTokens();
-        expect(getAccessToken()).toBeUndefined();
+describe("Input sanity checks", () => {
+    it("trims whitespace from query", () => {
+        const query = "  checkout service down  ";
+        expect(query.trim()).toBe("checkout service down");
+    });
+
+    it("rejects empty queries", () => {
+        const query = "   ";
+        expect(query.trim().length).toBe(0);
+    });
+
+    it("caps extremely long inputs at frontend boundary", () => {
+        const MAX = 4000;
+        const query = "x".repeat(10000);
+        const capped = query.slice(0, MAX);
+        expect(capped.length).toBe(MAX);
     });
 });

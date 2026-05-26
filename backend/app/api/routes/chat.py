@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -16,7 +16,10 @@ router = APIRouter()
 
 
 @router.post(
-    ChatURIs.ROOT, response_model=ChatResponse, status_code=201, summary="Create a new chat session"
+    ChatURIs.ROOT,
+    response_model=ChatResponse,
+    status_code=201,
+    summary="Create a new chat session",
 )
 async def create_chat(
     payload: ChatCreate,
@@ -26,7 +29,11 @@ async def create_chat(
     return await ChatService(db).create_chat(payload, user_id=current_user.id)
 
 
-@router.get(ChatURIs.ROOT, response_model=list[ChatResponse], summary="List my chat sessions")
+@router.get(
+    ChatURIs.ROOT,
+    response_model=list[ChatResponse],
+    summary="List my chat sessions",
+)
 async def list_chats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -34,7 +41,11 @@ async def list_chats(
     return await ChatService(db).list_chats(user_id=current_user.id)
 
 
-@router.get(ChatURIs.SESSION, response_model=ChatResponse, summary="Get a specific chat session")
+@router.get(
+    ChatURIs.SESSION,
+    response_model=ChatResponse,
+    summary="Get a specific chat session",
+)
 async def get_chat(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -47,7 +58,9 @@ async def get_chat(
 
 
 @router.get(
-    ChatURIs.MESSAGES, response_model=list[MessageResponse], summary="Get all messages in a session"
+    ChatURIs.MESSAGES,
+    response_model=list[MessageResponse],
+    summary="Get all messages in a session",
 )
 async def get_messages(
     session_id: uuid.UUID,
@@ -57,7 +70,11 @@ async def get_messages(
     return await ChatService(db).get_messages(str(session_id))
 
 
-@router.get(ChatURIs.EXECUTIONS, response_model=list[dict], summary="Get agent execution trace")
+@router.get(
+    ChatURIs.EXECUTIONS,
+    response_model=list[dict],
+    summary="Get agent execution trace",
+)
 async def get_executions(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -67,11 +84,15 @@ async def get_executions(
 
 
 @router.delete(
-    ChatURIs.SESSION, status_code=status.HTTP_204_NO_CONTENT, summary="Delete a chat session"
+    ChatURIs.SESSION,
+    # NOTE: 204 must NOT have a response_model — FastAPI enforces this
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a chat session",
 )
 async def delete_chat(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> None:
+) -> Response:
     await ChatService(db).delete_chat(str(session_id), user_id=current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
