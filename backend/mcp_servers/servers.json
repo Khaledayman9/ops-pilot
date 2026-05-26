@@ -1,0 +1,22 @@
+{
+  "github": {
+    "command": "uvx",
+    "args": [
+      "mcp-server-github"
+    ],
+    "transport": "stdio",
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+    }
+  },
+  "ops-inspector": {
+    "command": "uv",
+    "args": [
+      "run",
+      "python",
+      "-m",
+      "mcp_servers.servers.ops_inspector"
+    ],
+    "transport": "stdio"
+  }
+}

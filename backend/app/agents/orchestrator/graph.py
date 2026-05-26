@@ -1,14 +1,16 @@
 """
 LangGraph-style incident orchestrator.
 
-Pipeline (7 steps):
-  1. ClassifierAgent       — classify service, severity, type
-  2. EntityExtractorAgent  — extract entities (formerly SearcherAgent)
-  3. GraphAnalyzerAgent    — deep Neo4j traversal
-  4. WebSearcherAgent      — DuckDuckGo web intelligence
-  5. IncidentAnalysisCrew  — CrewAI 2-agent enrichment
-  6. RootCauseFinderAgent  — structured RCA
-  7. RemediatorAgent       — ordered remediation plan
+Pipeline (9 steps):
+  1. ClassifierAgent    — classify service, severity, type
+  2. EntityExtractorAgent — extract entities
+  3. RepoScoutAgent     — GitHub repo intelligence (branches, issues, PRs)
+  4. GraphAnalyzerAgent — deep Neo4j traversal
+  5. WebSearcherAgent   — DuckDuckGo web intelligence
+  6. OpsAnalystAgent    — stack-trace / error-rate / health diagnostics
+  7. IncidentAnalysisCrew — CrewAI 2-agent enrichment
+  8. RootCauseFinderAgent — structured RCA
+  9. RemediatorAgent    — ordered remediation plan
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ from ..remediator import RemediatorAgent, RemediatorInput
 from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
 from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
+from ..repo_scouter import RepoScoutAgent, RepoScoutInput
+from ..ops_analyst import OpsAnalystAgent, OpsAnalystInput, AnalysisTask
 from .models import IncidentState
 
 
@@ -32,8 +36,10 @@ class IncidentOrchestrator:
     def __init__(self) -> None:
         self._classifier = ClassifierAgent()
         self._extractor = EntityExtractorAgent()
+        self._repo_scout = RepoScoutAgent()
         self._graph = GraphAnalyzerAgent()
         self._web_searcher = WebSearcherAgent()
+        self._ops_analyst = OpsAnalystAgent()
         self._crew = IncidentAnalysisCrew()
         self._root_cause = RootCauseFinderAgent()
         self._remediator = RemediatorAgent()
@@ -114,7 +120,59 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 3. Deep graph traversal
+        # 3. GitHub repo scouting
+        # Derive owner/repo from service name or entities if possible.
+        # Falls back gracefully if GITHUB_TOKEN is not set.
+        yield StreamEvent(
+            event="step",
+            agent="repo_scout",
+            step="repo_scouting",
+            status="running",
+            data={"message": "Scouting GitHub repository for recent activity…"},
+        )
+        try:
+            # Best-effort: split "owner/repo" from service name or use service as repo
+            service_slug = (state.service or "unknown").replace(" ", "-").lower()
+            parts = service_slug.split("/", 1)
+            owner = parts[0] if len(parts) == 2 else "unknown"
+            repo = parts[1] if len(parts) == 2 else service_slug
+
+            scout_out = await self._repo_scout.run(
+                RepoScoutInput(
+                    owner=owner,
+                    repo=repo,
+                    task="summarize",
+                    extra_context=(
+                        f"Incident type: {state.incident_type or 'unknown'}. "
+                        f"Focus on recent commits, open PRs, and failing checks."
+                    ),
+                )
+            )
+            state.repo_scout_summary = scout_out.summary
+            state.repo_scout_tools_used = scout_out.tools_used
+            state.completed_steps.append("repo_scouting")
+            yield StreamEvent(
+                event="step",
+                agent="repo_scout",
+                step="repo_scouting",
+                status="complete",
+                data={
+                    "summary": scout_out.summary[:500],
+                    "tools_used": scout_out.tools_used,
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"[Orchestrator] RepoScout: {exc} — continuing without GitHub data")
+            state.errors.append(f"repo_scout: {exc}")
+            yield StreamEvent(
+                event="step",
+                agent="repo_scout",
+                step="repo_scouting",
+                status="error",
+                data={"error": str(exc)},
+            )
+
+        # 4. Deep graph traversal
         yield StreamEvent(
             event="step",
             agent="graph_analyzer",
@@ -150,7 +208,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 4. Web intelligence
+        # 5. Web intelligence
         yield StreamEvent(
             event="step",
             agent="web_searcher",
@@ -186,7 +244,52 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 5. CrewAI enrichment
+        # 6. Ops diagnostics
+        # Run the OpsAnalyst over the raw incident query to parse any embedded
+        # stack traces or error counts, then fold the result into web_context
+        # so the crew and root-cause steps benefit from structured diagnostics.
+        yield StreamEvent(
+            event="step",
+            agent="ops_analyst",
+            step="ops_diagnostics",
+            status="running",
+            data={"message": "Running operational diagnostics…"},
+        )
+        try:
+            analyst_out = await self._ops_analyst.run(
+                OpsAnalystInput(
+                    task=AnalysisTask.GENERAL,
+                    payload=query,
+                    service_name=state.service or "unknown",
+                )
+            )
+            state.ops_analyst_result = analyst_out.result
+            state.ops_analyst_tools_used = analyst_out.tools_used
+            if analyst_out.result:
+                web_context = f"{web_context}\n\n=== Ops Diagnostics ===\n{analyst_out.result}"
+            state.completed_steps.append("ops_diagnostics")
+            yield StreamEvent(
+                event="step",
+                agent="ops_analyst",
+                step="ops_diagnostics",
+                status="complete",
+                data={
+                    "result": analyst_out.result[:500],
+                    "tools_used": analyst_out.tools_used,
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"[Orchestrator] OpsAnalyst: {exc} — continuing without diagnostics")
+            state.errors.append(f"ops_analyst: {exc}")
+            yield StreamEvent(
+                event="step",
+                agent="ops_analyst",
+                step="ops_diagnostics",
+                status="error",
+                data={"error": str(exc)},
+            )
+
+        # 7. CrewAI enrichment
         yield StreamEvent(
             event="step",
             agent="crew",
@@ -222,7 +325,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 6. Root cause analysis
+        # 8. Root cause analysis
         yield StreamEvent(
             event="step",
             agent="root_cause_finder",
@@ -266,7 +369,7 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 7. Remediation
+        # 9. Remediation
         yield StreamEvent(
             event="step",
             agent="remediator",
@@ -321,6 +424,14 @@ class IncidentOrchestrator:
                 "severity": state.severity,
                 "classification": state.classification,
                 "graph_context": state.graph_context,
+                "repo_scout": {
+                    "summary": state.repo_scout_summary,
+                    "tools_used": state.repo_scout_tools_used,
+                },
+                "ops_diagnostics": {
+                    "result": state.ops_analyst_result,
+                    "tools_used": state.ops_analyst_tools_used,
+                },
                 "root_cause": state.root_cause,
                 "causal_chain": state.causal_chain,
                 "blast_radius": {

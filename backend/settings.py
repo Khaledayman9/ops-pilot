@@ -5,7 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # ── LLM provider selection ────────────────────────────────────────────────
-    # Choices: "openai" | "anthropic" | "google"
     LLM_PROVIDER: str = "openai"
     LLM_MODEL: str = "gpt-4o"
     LLM_TEMPERATURE: float = 0.0
@@ -54,6 +53,11 @@ class Settings(BaseSettings):
     ENABLE_PII_SCRUBBING: bool = True
     ENABLE_PROMPT_INJECTION_PROTECTION: bool = True
     MAX_QUERY_LENGTH: int = 4000
+
+    # ── GitHub MCP ───────────────────────────────────────────────────────────
+    # Create a Personal Access Token at https://github.com/settings/tokens
+    # Required scopes: repo, read:org, read:user
+    GITHUB_TOKEN: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False

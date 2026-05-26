@@ -38,6 +38,8 @@ from app.agents.web_searcher import (
     search_to_text,
 )
 from app.agents.crew import IncidentAnalysisCrew, WebSearchTool
+from app.agents.repo_scouter import RepoScoutAgent, RepoScoutInput, RepoScoutOutput
+from app.agents.ops_analyst import OpsAnalystAgent, OpsAnalystInput, OpsAnalystOutput, AnalysisTask
 
 __all__ = [
     # Classifier
@@ -76,4 +78,13 @@ __all__ = [
     # Crew
     "IncidentAnalysisCrew",
     "WebSearchTool",
+    # Repo scout (GitHub MCP)
+    "RepoScoutAgent",
+    "RepoScoutInput",
+    "RepoScoutOutput",
+    # Ops analyst (custom ops-inspector MCP)
+    "OpsAnalystAgent",
+    "OpsAnalystInput",
+    "OpsAnalystOutput",
+    "AnalysisTask",
 ]

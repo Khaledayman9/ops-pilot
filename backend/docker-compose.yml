@@ -54,6 +54,11 @@ services:
       - "8000:8000"
     volumes:
       - .:/app
+      # Shadow the .venv directory with a named volume so the Linux virtualenv
+      # created inside the container never lands on the Windows host filesystem.
+      # This fixes both the "Access is denied on lib64" alembic error and the
+      # re-download-on-every-start problem.
+      - backend_venv:/app/.venv
     env_file: .env
     command: uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
     depends_on:
@@ -71,6 +76,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/app
+      - worker_venv:/app/.venv
     env_file: .env
     command: uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     depends_on:
@@ -86,6 +92,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/app
+      - beat_venv:/app/.venv
     env_file: .env
     command: uv run celery -A app.tasks.celery_app beat --loglevel=info
     depends_on:
@@ -96,3 +103,6 @@ volumes:
   postgres_data:
   neo4j_data:
   redis_data:
+  backend_venv:
+  worker_venv:
+  beat_venv:

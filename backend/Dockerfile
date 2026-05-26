@@ -3,7 +3,7 @@ FROM python:3.11-slim
 ARG UID=10001
 ARG GID=10001
 
-# Install system deps and uv AS ROOT before switching user
+# Install system deps
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -14,14 +14,11 @@ RUN groupadd --gid $GID appgroup \
 
 WORKDIR /app
 
-# Copy dependency files first for layer caching
-COPY pyproject.toml requirements.txt ./
+# Copy ALL source first (needed because hatchling validates README.md etc.)
+COPY . .
 
 # Install deps as root so uv lands in /usr/local (accessible to all users)
 RUN uv sync --no-dev
-
-# Copy application code
-COPY . .
 
 RUN chown -R appuser:appgroup /app
 
