@@ -22,6 +22,7 @@ logs/
 htmlcov/
 .coverage
 coverage.xml
+celerybeat-schedule
 
 # Node
 node_modules/
