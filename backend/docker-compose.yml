@@ -60,7 +60,7 @@ services:
       # re-download-on-every-start problem.
       - backend_venv:/app/.venv
     env_file: .env
-    command: uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
         condition: service_healthy

@@ -7,12 +7,10 @@ class EntityExtractorAgent(BaseAgent):
     """
     Extracts structured entities (services, deployments, metrics, error codes)
     from a raw incident description.
-
-    Formerly named SearcherAgent — renamed to avoid confusion with WebSearcherAgent.
     """
 
     def __init__(self, **kwargs) -> None:
-        super().__init__("searcher", **kwargs)
+        super().__init__("entity_extractor", **kwargs)
         self._chain = self._build_chain(EntityExtractorOutput)
 
     async def run(self, inp: EntityExtractorInput) -> EntityExtractorOutput:

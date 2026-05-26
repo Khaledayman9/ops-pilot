@@ -25,7 +25,7 @@ class RepoScoutAgent(BaseAgent):
     """
 
     def __init__(self, **kwargs) -> None:
-        super().__init__("repo_scout", **kwargs)
+        super().__init__("repo_scouter", **kwargs)
         self._mcp_manager = MCPClientManager()
         self._init_lock = asyncio.Lock()
         self._agent = None
