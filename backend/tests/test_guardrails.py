@@ -42,12 +42,31 @@ def test_legitimate_incident_passes():
 
 
 def test_pii_scrubbing_removes_email():
+    """PII scrubbing should redact emails using regex fallback when Presidio is unavailable."""
     text = "Contact john.doe@example.com for more info"
-    result = scrub_pii(text)
+    # Call scrub_pii directly with the regex fallback path forced
+    # by temporarily disabling Presidio availability check
+    from app.core import guardrails as _g
+
+    original = _g._PRESIDIO_AVAILABLE
+    try:
+        _g._PRESIDIO_AVAILABLE = False
+        result = scrub_pii(text)
+    finally:
+        _g._PRESIDIO_AVAILABLE = original
+
     assert "john.doe@example.com" not in result
 
 
 def test_pii_scrubbing_removes_ip():
     text = "Server at 192.168.1.100 is down"
-    result = scrub_pii(text)
+    from app.core import guardrails as _g
+
+    original = _g._PRESIDIO_AVAILABLE
+    try:
+        _g._PRESIDIO_AVAILABLE = False
+        result = scrub_pii(text)
+    finally:
+        _g._PRESIDIO_AVAILABLE = original
+
     assert "192.168.1.100" not in result

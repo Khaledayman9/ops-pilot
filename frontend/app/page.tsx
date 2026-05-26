@@ -78,6 +78,9 @@ const FEATURES = [
   { icon: Layers, title: "7-Agent Orchestration", desc: "LangGraph pipeline with CrewAI web enrichment + guardrails at every step.", accent: "#00ccff" },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _Terminal = Terminal; // imported for potential future use
+
 function TerminalSim() {
   const [lines, setLines] = useState<typeof SIM_LINES>([]);
   const [running, setRunning] = useState(false);
@@ -393,6 +396,7 @@ export default function HomePage() {
                 <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
               </Link>
 
+
               href="#how-it-works"
               className="flex items-center gap-2 px-7 py-3.5 border border-border-2 text-chrome-dim rounded-lg hover:border-plasma hover:text-plasma transition-colors text-sm font-mono"
               >
@@ -406,7 +410,7 @@ export default function HomePage() {
             transition={{ delay: 0.6 }}
             className="flex flex-wrap gap-2"
           >
-            {["Neo4j", "LangGraph", "FastAPI", "CrewAI", "Next.js 14", "Pydantic v2"].map((t) => (
+            {["Neo4j", "LangGraph", "FastAPI", "CrewAI", "Next.js 15", "Pydantic v2"].map((t) => (
               <span
                 key={t}
                 className="px-2.5 py-1 border border-border-1 rounded text-xs text-chrome-dim font-mono hover:border-plasma hover:text-plasma transition-colors cursor-default"

@@ -1,5 +1,4 @@
 from app.core import BaseAgent, format_prompt
-from logger import logger
 
 from .models import ClassificationInput, ClassificationOutput
 

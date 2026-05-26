@@ -24,6 +24,7 @@ from .chat import router as chat_router
 from .health import router as health_router
 from .incident import router as incident_router
 from .stream import router as stream_router
+from .settings import router as settings_router
 
 # Root router
 router = APIRouter()
@@ -37,6 +38,7 @@ v1.include_router(auth_router, prefix="/auth", tags=["auth"])
 v1.include_router(incident_router, prefix="/incident", tags=["incident"])
 v1.include_router(chat_router, prefix="/chat", tags=["chat"])
 v1.include_router(stream_router, prefix="/stream", tags=["stream"])
+v1.include_router(settings_router, prefix="/settings", tags=["settings"])
 
 router.include_router(v1)
 

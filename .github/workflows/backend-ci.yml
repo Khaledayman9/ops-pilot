@@ -50,7 +50,7 @@ jobs:
       SECRET_KEY: ci-test-secret-key-32-chars-longx
       ALGORITHM: HS256
       LOG_DIR: logs
-      ENABLE_PII_SCRUBBING: "false"
+      ENABLE_PII_SCRUBBING: "true"
       ENABLE_PROMPT_INJECTION_PROTECTION: "true"
       MAX_QUERY_LENGTH: "4000"
 
