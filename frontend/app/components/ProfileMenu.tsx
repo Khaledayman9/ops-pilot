@@ -2,66 +2,105 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, LogIn, Settings, User, UserPlus } from "lucide-react";
+import {
+  ChevronDown,
+  LogIn,
+  Moon,
+  Settings,
+  Sun,
+  User,
+  UserPlus,
+} from "lucide-react";
 import { getAccessToken } from "../lib/apis";
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
   useEffect(() => {
     setAuthed(Boolean(getAccessToken()));
+
+    const savedTheme =
+      typeof window !== "undefined"
+        ? localStorage.getItem("ops-pilot-theme")
+        : null;
+    const initialTheme = savedTheme === "light" ? "light" : "dark";
+
+    setTheme(initialTheme);
+    document.documentElement.dataset.theme = initialTheme;
   }, []);
 
+  function toggleTheme() {
+    setTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.dataset.theme = next;
+      localStorage.setItem("ops-pilot-theme", next);
+      return next;
+    });
+  }
+
   return (
-    <div className="fixed top-3 right-6 z-[70]">
+    <div className="fixed top-3 right-6 z-[70] flex items-start gap-2">
       <button
-        onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-2 px-3 py-2 border border-border-1 rounded-lg bg-void/90 backdrop-blur text-xs font-mono text-chrome-dim hover:border-plasma hover:text-plasma transition-colors"
+        type="button"
+        onClick={toggleTheme}
+        className="w-9 h-9 rounded-lg border border-border-1 bg-void/90 backdrop-blur text-chrome-dim hover:border-plasma hover:text-plasma transition-colors flex items-center justify-center"
+        aria-label="Toggle theme"
+        title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
       >
-        <User size={14} />
-        Profile
-        <ChevronDown size={13} />
+        {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
       </button>
 
-      {open && (
-        <div className="absolute right-0 mt-2 w-48 bg-surface-1 border border-border-1 rounded-lg p-2 shadow-xl">
-          {authed ? (
+      <div className="relative">
+        <button
+          onClick={() => setOpen((value) => !value)}
+          className="flex items-center gap-2 px-3 py-2 border border-border-1 rounded-lg bg-void/90 backdrop-blur text-xs font-mono text-chrome-dim hover:border-plasma hover:text-plasma transition-colors"
+        >
+          <User size={14} />
+          Profile
+          <ChevronDown size={13} />
+        </button>
+
+        {open && (
+          <div className="absolute right-0 mt-2 w-48 bg-surface-1 border border-border-1 rounded-lg p-2 shadow-xl">
+            {authed ? (
+              <Link
+                href="/profile"
+                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
+              >
+                <User size={13} />
+                View profile
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
+                >
+                  <LogIn size={13} />
+                  Login
+                </Link>
+                <Link
+                  href="/register"
+                  className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
+                >
+                  <UserPlus size={13} />
+                  Register
+                </Link>
+              </>
+            )}
+
             <Link
-              href="/profile"
+              href="/settings"
               className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
             >
-              <User size={13} />
-              View profile
+              <Settings size={13} />
+              Settings
             </Link>
-          ) : (
-            <>
-              <Link
-                href="/login"
-                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-              >
-                <LogIn size={13} />
-                Login
-              </Link>
-              <Link
-                href="/register"
-                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-              >
-                <UserPlus size={13} />
-                Register
-              </Link>
-            </>
-          )}
-
-          <Link
-            href="/settings"
-            className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-          >
-            <Settings size={13} />
-            Settings
-          </Link>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

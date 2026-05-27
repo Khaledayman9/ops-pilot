@@ -12,14 +12,12 @@ import {
   GitBranch,
   HelpCircle,
   Mail,
-  Moon,
   Network,
   Radar,
   ScanSearch,
   FileText,
   Shield,
   Sparkles,
-  Sun,
   Terminal,
   Workflow,
   Wrench,
@@ -302,34 +300,16 @@ const particlePositions = [
   { left: "94%", top: "14%" },
 ];
 
-function Nav({
-  theme,
-  onToggleTheme,
-}: {
-  theme: "dark" | "light";
-  onToggleTheme: () => void;
-}) {
+function Nav() {
   return (
     <nav className="fixed top-0 w-full z-50 border-b border-border-1 bg-void/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            className="w-9 h-9 rounded-lg border border-border-1 bg-surface-1 text-chrome-dim hover:text-plasma hover:border-plasma transition-colors flex items-center justify-center"
-            aria-label="Toggle theme"
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          >
-            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-          </button>
-
-          <Link href="/" className="flex items-center gap-2">
-            <Zap size={18} className="text-plasma" />
-            <span className="font-display font-semibold text-chrome tracking-tight">
-              ops<span className="text-plasma">-pilot</span>
-            </span>
-          </Link>
-        </div>
+        <Link href="/" className="flex items-center gap-2">
+          <Zap size={18} className="text-plasma" />
+          <span className="font-display font-semibold text-chrome tracking-tight">
+            ops<span className="text-plasma">-pilot</span>
+          </span>
+        </Link>
 
         <div className="flex items-center gap-5 text-xs font-mono">
           <a
@@ -579,11 +559,6 @@ function AnimatedCounter({
 
 export default function HomePage() {
   const heroParticlesRef = useRef<HTMLDivElement>(null);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-
-  function toggleTheme() {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
-  }
   useEffect(() => {
     loadAnime().then(() => {
       if (!anime || !heroParticlesRef.current) return;
@@ -605,11 +580,8 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div
-      data-theme={theme}
-      className="min-h-screen bg-void grid-bg overflow-x-hidden"
-    >
-      <Nav theme={theme} onToggleTheme={toggleTheme} />
+    <div className="min-h-screen bg-void grid-bg overflow-x-hidden">
+      <Nav />
 
       <section className="relative min-h-screen flex items-center pt-14">
         <div
