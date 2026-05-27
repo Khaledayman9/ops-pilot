@@ -4,7 +4,6 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  Bot,
   CheckCircle2,
   GitBranch,
   HelpCircle,
