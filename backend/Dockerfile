@@ -14,11 +14,20 @@ RUN groupadd --gid $GID appgroup \
 
 WORKDIR /app
 
-# Copy ALL source first (needed because hatchling validates README.md etc.)
-COPY . .
+# Copy dependency files first (better layer caching)
+COPY pyproject.toml uv.lock* ./
 
-# Install deps as root so uv lands in /usr/local (accessible to all users)
-RUN uv sync --no-dev
+# Cache uv packages between builds
+ENV UV_CACHE_DIR=/root/.cache/uv
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --no-install-project
+
+# Copy rest of source
+COPY --chown=appuser:appgroup . .
+
+# Install the project itself (fast, no re-downloading deps)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev
 
 RUN chown -R appuser:appgroup /app
 
