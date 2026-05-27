@@ -18,6 +18,23 @@
   --chrome-dim: #888888;
 }
 
+[data-theme="light"] {
+  --plasma: #008f6b;
+  --plasma-dim: #00785b;
+  --ember: #d63f4a;
+  --amber: #b87800;
+  --ice: #0077b6;
+  --void: #eef5f8;
+  --obsidian: #e4edf2;
+  --surface-1: #f7fbfd;
+  --surface-2: #e9f1f5;
+  --surface-3: #dce8ee;
+  --border-1: #bfd0da;
+  --border-2: #8fa8b6;
+  --chrome: #10242d;
+  --chrome-dim: #55717e;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -69,8 +86,15 @@ body {
 
 .grid-bg {
   background-image:
-    linear-gradient(rgba(0, 255, 136, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 255, 136, 0.025) 1px, transparent 1px);
+    linear-gradient(
+      color-mix(in srgb, var(--plasma) 8%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--plasma) 8%, transparent) 1px,
+      transparent 1px
+    );
   background-size: 40px 40px;
 }
 

@@ -61,7 +61,7 @@ async def get_current_settings() -> dict:
         "llm_max_retries": settings.LLM_MAX_RETRIES,
         "openai_base_url": settings.OPENAI_BASE_URL,
         "github_token_set": bool(settings.GITHUB_TOKEN),
-        "terraform_token_set": bool(__import__("os").environ.get("TERRAFORM_CLOUD_TOKEN")),
+        "terraform_token_set": bool(settings.TERRAFORM_CLOUD_TOKEN),
         "pii_scrubbing": settings.ENABLE_PII_SCRUBBING,
         "injection_protection": settings.ENABLE_PROMPT_INJECTION_PROTECTION,
     }

@@ -12,14 +12,17 @@ import {
   GitBranch,
   HelpCircle,
   Mail,
+  Moon,
   Network,
   Radar,
   ScanSearch,
   FileText,
   Shield,
   Sparkles,
+  Sun,
   Terminal,
   Workflow,
+  Wrench,
   Zap,
 } from "lucide-react";
 
@@ -83,52 +86,62 @@ const simLines = [
     color: "#00ff88",
   },
   {
-    t: 500,
+    t: 450,
     txt: "> [orchestrator] route=incident_graph priority=P1",
     color: "#00ccff",
   },
   {
-    t: 1000,
+    t: 900,
     txt: "> [classifier] service=checkout-service severity=P1",
     color: "#e0e0e0",
   },
   {
-    t: 1500,
+    t: 1350,
     txt: "> [entity_extractor] entities=6 deployment=v2.3.1",
     color: "#e0e0e0",
   },
   {
-    t: 2100,
+    t: 1850,
     txt: "> [repo_scanner] suspect_commit=9f32c1 owner=payments",
     color: "#ffaa00",
   },
   {
-    t: 2700,
+    t: 2350,
+    txt: "> [terraform_scanner] drift=iam_policy workspace=prod-us",
+    color: "#00ccff",
+  },
+  {
+    t: 2850,
     txt: "> [ops_analyst] cpu=91% latency_p95=4.8s error_rate=12%",
     color: "#ffaa00",
   },
   {
-    t: 3300,
+    t: 3350,
+    txt: "> [web_intelligence] provider_status=nominal advisories=1",
+    color: "#ff4444",
+  },
+  {
+    t: 3850,
     txt: "> [graph_analyzer] blast_radius=4 upstream=api-gateway",
     color: "#ffaa00",
   },
   {
-    t: 3900,
-    txt: "> [root_cause_analyzer] cause='memory leak in v2.3.1' confidence=0.91",
+    t: 4450,
+    txt: "> [root_cause_analyzer] cause='memory leak plus config drift' confidence=0.91",
     color: "#00ff88",
   },
   {
-    t: 4600,
+    t: 5100,
     txt: "> [remediator] rollback=v2.3.0 runbook=RB-001",
     color: "#e0e0e0",
   },
-  { t: 5200, txt: "Analysis complete in 5.2s", color: "#00ff88" },
+  { t: 5700, txt: "Analysis complete in 5.7s", color: "#00ff88" },
 ];
 
 const stats = [
   {
     label: "Agents Coordinated",
-    value: "10",
+    value: "11",
     sub: "orchestrator plus specialists",
   },
   {
@@ -186,6 +199,12 @@ const agents = [
     role: "Inspects recent commits, PRs, releases, and deployment metadata for suspicious changes.",
   },
   {
+    name: "Terraform Scanner",
+    icon: Wrench,
+    color: "#00ccff",
+    role: "Uses Terraform MCP context to inspect workspaces, plans, drift, state signals, and infrastructure changes.",
+  },
+  {
     name: "Ops Analyst",
     icon: Activity,
     color: "#ffaa00",
@@ -231,6 +250,12 @@ const features = [
     accent: "#ffaa00",
   },
   {
+    icon: Wrench,
+    title: "Terraform MCP Inspection",
+    desc: "Terraform Scanner checks infrastructure context, drift, plans, workspaces, and IaC changes alongside app signals.",
+    accent: "#00ccff",
+  },
+  {
     icon: Activity,
     title: "Ops Telemetry Analysis",
     desc: "Ops Analyst compares latency, errors, saturation, and resource pressure against the incident timeline.",
@@ -253,9 +278,9 @@ const features = [
 const orchestrationSteps = [
   "Incident enters the Orchestrator",
   "Classifier and Entity Extractor normalize the request",
-  "Graph Analyzer, Repo Scanner, Ops Analyst, and Web Intelligence collect evidence in parallel",
-  "Root Cause Analyzer weighs evidence and explains the causal chain",
-  "Remediator produces the operator-ready response",
+  "Document Processor adds uploaded evidence when files exist",
+  "Repo Scanner, Terraform Scanner, Graph Analyzer, Ops Analyst, and Web Intelligence collect evidence",
+  "Root Cause Analyzer weighs evidence and Remediator produces the operator-ready response",
 ];
 
 const particlePositions = [
@@ -277,16 +302,34 @@ const particlePositions = [
   { left: "94%", top: "14%" },
 ];
 
-function Nav() {
+function Nav({
+  theme,
+  onToggleTheme,
+}: {
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
+}) {
   return (
     <nav className="fixed top-0 w-full z-50 border-b border-border-1 bg-void/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <Zap size={18} className="text-plasma" />
-          <span className="font-display font-semibold text-chrome tracking-tight">
-            ops<span className="text-plasma">-pilot</span>
-          </span>
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="w-9 h-9 rounded-lg border border-border-1 bg-surface-1 text-chrome-dim hover:text-plasma hover:border-plasma transition-colors flex items-center justify-center"
+            aria-label="Toggle theme"
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          >
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
+          <Link href="/" className="flex items-center gap-2">
+            <Zap size={18} className="text-plasma" />
+            <span className="font-display font-semibold text-chrome tracking-tight">
+              ops<span className="text-plasma">-pilot</span>
+            </span>
+          </Link>
+        </div>
 
         <div className="flex items-center gap-5 text-xs font-mono">
           <a
@@ -536,7 +579,11 @@ function AnimatedCounter({
 
 export default function HomePage() {
   const heroParticlesRef = useRef<HTMLDivElement>(null);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
+  function toggleTheme() {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
+  }
   useEffect(() => {
     loadAnime().then(() => {
       if (!anime || !heroParticlesRef.current) return;
@@ -558,8 +605,11 @@ export default function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-void grid-bg overflow-x-hidden">
-      <Nav />
+    <div
+      data-theme={theme}
+      className="min-h-screen bg-void grid-bg overflow-x-hidden"
+    >
+      <Nav theme={theme} onToggleTheme={toggleTheme} />
 
       <section className="relative min-h-screen flex items-center pt-14">
         <div
@@ -613,10 +663,10 @@ export default function HomePage() {
               transition={{ delay: 0.3 }}
               className="text-chrome-dim text-sm leading-relaxed mb-10 max-w-lg font-mono"
             >
-              Ops-Pilot uses an orchestrator plus eight specialist agents to
-              classify incidents, scan repositories, inspect telemetry, traverse
-              the service graph, explain root cause, and produce remediation
-              steps.
+              Ops-Pilot uses an orchestrator plus ten specialist agents to
+              classify incidents, process documents, scan repositories, inspect
+              Terraform context, read telemetry, traverse the service graph,
+              explain root cause, and produce remediation steps.
             </motion.p>
 
             <motion.div
@@ -653,6 +703,7 @@ export default function HomePage() {
               {[
                 "Orchestrator",
                 "Repo Scanner",
+                "Terraform Scanner",
                 "Ops Analyst",
                 "Neo4j",
                 "LangGraph",

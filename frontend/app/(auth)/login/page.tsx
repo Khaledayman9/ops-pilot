@@ -4,10 +4,8 @@ import { FormEvent, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Loader2, Lock, Mail, Zap } from "lucide-react";
-import { ApiException, login } from "../../lib/apis";
-import { Github } from "lucide-react";
-import { finishOAuth, startOAuth } from "../../lib/apis";
+import { AlertCircle, Github, Loader2, Lock, Mail, Zap } from "lucide-react";
+import { ApiException, login, startOAuth } from "../../lib/apis";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -83,6 +81,9 @@ export default function LoginPage() {
               onClick={() => handleOAuth("google")}
               className="w-full flex items-center justify-center gap-2 py-3 border border-border-1 rounded-lg text-sm font-mono text-chrome-dim hover:border-plasma hover:text-plasma transition-colors"
             >
+              <span className="w-4 h-4 rounded-full bg-chrome text-void text-[10px] font-display font-bold flex items-center justify-center">
+                G
+              </span>
               Sign in with Google
             </button>
             <button

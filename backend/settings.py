@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # Required scopes: repo, read:org, read:user
     GITHUB_TOKEN: str = ""
 
+    # Terraform MCP / Terraform Cloud
+    TERRAFORM_CLOUD_TOKEN: str = ""
+    TERRAFORM_WORKSPACE: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False
     )
