@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Zap } from "lucide-react";
 import { finishOAuth } from "../../lib/apis";
 
-export default function OAuthCallbackPage() {
+function CallbackContent() {
   const router = useRouter();
   const params = useSearchParams();
   const [error, setError] = useState("");
@@ -33,29 +33,58 @@ export default function OAuthCallbackPage() {
   }, [params, router]);
 
   return (
+    <CallbackShell>
+      {error ? (
+        <>
+          <h1 className="font-display text-xl font-bold mb-2">
+            Sign in failed
+          </h1>
+          <p className="text-sm text-ember font-mono">{error}</p>
+        </>
+      ) : (
+        <>
+          <Loader2
+            size={24}
+            className="text-plasma mx-auto mb-4 animate-spin"
+          />
+          <h1 className="font-display text-xl font-bold mb-2">
+            Completing sign in
+          </h1>
+          <p className="text-sm text-chrome-dim font-mono">Please wait...</p>
+        </>
+      )}
+    </CallbackShell>
+  );
+}
+
+function CallbackShell({ children }: { children: React.ReactNode }) {
+  return (
     <div className="min-h-screen bg-void grid-bg flex items-center justify-center px-4 text-chrome">
       <div className="bg-surface-1 border border-border-1 rounded-xl p-8 w-full max-w-md text-center">
         <Zap size={24} className="text-plasma mx-auto mb-4" />
-        {error ? (
-          <>
-            <h1 className="font-display text-xl font-bold mb-2">
-              Sign in failed
-            </h1>
-            <p className="text-sm text-ember font-mono">{error}</p>
-          </>
-        ) : (
-          <>
-            <Loader2
-              size={24}
-              className="text-plasma mx-auto mb-4 animate-spin"
-            />
-            <h1 className="font-display text-xl font-bold mb-2">
-              Completing sign in
-            </h1>
-            <p className="text-sm text-chrome-dim font-mono">Please wait...</p>
-          </>
-        )}
+        {children}
       </div>
     </div>
+  );
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <CallbackShell>
+          <Loader2
+            size={24}
+            className="text-plasma mx-auto mb-4 animate-spin"
+          />
+          <h1 className="font-display text-xl font-bold mb-2">
+            Completing sign in
+          </h1>
+          <p className="text-sm text-chrome-dim font-mono">Please wait...</p>
+        </CallbackShell>
+      }
+    >
+      <CallbackContent />
+    </Suspense>
   );
 }
