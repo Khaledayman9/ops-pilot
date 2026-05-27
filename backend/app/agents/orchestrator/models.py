@@ -40,6 +40,10 @@ class IncidentState(BaseModel):
     repo_scout_summary: str | None = None
     repo_scout_tools_used: list[str] = Field(default_factory=list)
 
+    # TerraformScoutAgent output
+    terraform_scout_summary: str | None = None
+    terraform_scout_tools_used: list[str] = Field(default_factory=list)
+
     # OpsAnalystAgent output
     ops_analyst_result: str | None = None
     ops_analyst_tools_used: list[str] = Field(default_factory=list)

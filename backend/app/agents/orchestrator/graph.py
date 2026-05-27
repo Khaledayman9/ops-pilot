@@ -1,19 +1,3 @@
-"""
-LangGraph-style incident orchestrator.
-
-Pipeline (9 steps):
-  1. ClassifierAgent    — classify service, severity, type
-  2. DocumentPreprocessorAgent — Preprocess input documents to Markdown format
-  3. EntityExtractorAgent — extract entities
-  4. RepoScoutAgent     — GitHub repo intelligence (branches, issues, PRs)
-  5. GraphAnalyzerAgent — deep Neo4j traversal
-  6. WebSearcherAgent   — DuckDuckGo web intelligence
-  7. OpsAnalystAgent    — stack-trace / error-rate / health diagnostics
-  8. IncidentAnalysisCrew — CrewAI 2-agent enrichment
-  9. RootCauseFinderAgent — structured RCA
-  10. RemediatorAgent    — ordered remediation plan
-"""
-
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -29,8 +13,34 @@ from ..ops_analyst import AnalysisTask, OpsAnalystAgent, OpsAnalystInput
 from ..remediator import RemediatorAgent, RemediatorInput
 from ..repo_scouter import RepoScoutAgent, RepoScoutInput
 from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
+from ..terraform_scouter import TerraformScoutAgent, TerraformScoutInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
+
+
+DEFAULT_ENABLED_AGENTS = {
+    "orchestrator",
+    "document_processor",
+    "classifier",
+    "entity_extractor",
+    "repo_scout",
+    "terraform_scout",
+    "graph_analyzer",
+    "web_searcher",
+    "ops_analyst",
+    "crew",
+    "root_cause_finder",
+    "remediator",
+}
+
+REQUIRED_AGENTS = {
+    "orchestrator",
+    "classifier",
+    "entity_extractor",
+    "graph_analyzer",
+    "root_cause_finder",
+    "remediator",
+}
 
 
 class IncidentOrchestrator:
@@ -38,6 +48,7 @@ class IncidentOrchestrator:
         self._classifier = ClassifierAgent()
         self._extractor = EntityExtractorAgent()
         self._repo_scout = RepoScoutAgent()
+        self._terraform_scout = TerraformScoutAgent()
         self._graph = GraphAnalyzerAgent()
         self._web_searcher = WebSearcherAgent()
         self._ops_analyst = OpsAnalystAgent()
@@ -50,7 +61,10 @@ class IncidentOrchestrator:
         query: str,
         session_id: str,
         document_context: str = "",
+        enabled_agents: set[str] | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
+        enabled_agents = (enabled_agents or DEFAULT_ENABLED_AGENTS) | REQUIRED_AGENTS
+
         state = IncidentState(query=query, session_id=session_id)
         state.document_context = document_context or ""
         state.document_context_chars = len(state.document_context)
@@ -68,7 +82,10 @@ class IncidentOrchestrator:
             agent="orchestrator",
             step="orchestration_start",
             status="running",
-            data={"message": "Starting orchestrator turn"},
+            data={
+                "message": "Starting orchestrator turn",
+                "enabled_agents": sorted(enabled_agents),
+            },
         )
 
         if state.document_context:
@@ -153,51 +170,122 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
+        if "repo_scout" in enabled_agents:
+            yield StreamEvent(
+                event="step",
+                agent="repo_scout",
+                step="repo_scouting",
+                status="running",
+                data={"message": "Scouting GitHub repository for recent activity"},
+            )
+            try:
+                service_slug = (state.service or "unknown").replace(" ", "-").lower()
+                parts = service_slug.split("/", 1)
+                owner = parts[0] if len(parts) == 2 else "unknown"
+                repo = parts[1] if len(parts) == 2 else service_slug
+
+                scout_out = await self._repo_scout.run(
+                    RepoScoutInput(
+                        owner=owner,
+                        repo=repo,
+                        task="summarize",
+                        extra_context=(
+                            f"Incident type: {state.incident_type or 'unknown'}. "
+                            f"Document context chars: {state.document_context_chars}. "
+                            "Focus on recent commits, open PRs, and failing checks."
+                        ),
+                    )
+                )
+                state.repo_scout_summary = scout_out.summary
+                state.repo_scout_tools_used = scout_out.tools_used
+                state.completed_steps.append("repo_scouting")
+                yield StreamEvent(
+                    event="step",
+                    agent="repo_scout",
+                    step="repo_scouting",
+                    status="complete",
+                    data={"summary": scout_out.summary[:500], "tools_used": scout_out.tools_used},
+                )
+            except Exception as exc:
+                logger.warning(f"[Orchestrator] RepoScout: {exc} - continuing without GitHub data")
+                state.errors.append(f"repo_scout: {exc}")
+                yield StreamEvent(
+                    event="step",
+                    agent="repo_scout",
+                    step="repo_scouting",
+                    status="error",
+                    data={"error": str(exc)},
+                )
+        else:
+            yield StreamEvent(
+                event="step",
+                agent="repo_scout",
+                step="repo_scouting",
+                status="skipped",
+                data={"message": "Repo Scanner disabled by user"},
+            )
+
+        if "terraform_scout" in enabled_agents:
+            yield StreamEvent(
+                event="step",
+                agent="terraform_scout",
+                step="terraform_scouting",
+                status="running",
+                data={"message": "Inspecting Terraform/IaC context"},
+            )
+            try:
+                terraform_out = await self._terraform_scout.run(
+                    TerraformScoutInput(
+                        task="summarize",
+                        workspace=state.service or "default",
+                        extra_context=effective_query,
+                    )
+                )
+                state.terraform_scout_summary = terraform_out.summary
+                state.terraform_scout_tools_used = terraform_out.tools_used
+                state.completed_steps.append("terraform_scouting")
+                yield StreamEvent(
+                    event="step",
+                    agent="terraform_scout",
+                    step="terraform_scouting",
+                    status="complete",
+                    data={
+                        "summary": terraform_out.summary[:500],
+                        "tools_used": terraform_out.tools_used,
+                    },
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"[Orchestrator] TerraformScout: {exc} - continuing without IaC data"
+                )
+                state.errors.append(f"terraform_scout: {exc}")
+                yield StreamEvent(
+                    event="step",
+                    agent="terraform_scout",
+                    step="terraform_scouting",
+                    status="error",
+                    data={"error": str(exc)},
+                )
+        else:
+            yield StreamEvent(
+                event="step",
+                agent="terraform_scout",
+                step="terraform_scouting",
+                status="skipped",
+                data={"message": "Terraform Scanner disabled by user"},
+            )
+
         yield StreamEvent(
             event="step",
-            agent="repo_scout",
-            step="repo_scouting",
+            agent="graph_analyzer",
+            step="neo4j_operation_plan",
             status="running",
-            data={"message": "Scouting GitHub repository for recent activity"},
+            data={
+                "message": "Preparing graph traversal queries",
+                "operation": "Neo4j dependency, upstream, blast radius, deployments, incidents, runbooks, ownership, config changes",
+                "query": "MATCH service/dependency/deployment/incident/runbook ownership patterns for affected service",
+            },
         )
-        try:
-            service_slug = (state.service or "unknown").replace(" ", "-").lower()
-            parts = service_slug.split("/", 1)
-            owner = parts[0] if len(parts) == 2 else "unknown"
-            repo = parts[1] if len(parts) == 2 else service_slug
-
-            scout_out = await self._repo_scout.run(
-                RepoScoutInput(
-                    owner=owner,
-                    repo=repo,
-                    task="summarize",
-                    extra_context=(
-                        f"Incident type: {state.incident_type or 'unknown'}. "
-                        f"Document context chars: {state.document_context_chars}. "
-                        "Focus on recent commits, open PRs, and failing checks."
-                    ),
-                )
-            )
-            state.repo_scout_summary = scout_out.summary
-            state.repo_scout_tools_used = scout_out.tools_used
-            state.completed_steps.append("repo_scouting")
-            yield StreamEvent(
-                event="step",
-                agent="repo_scout",
-                step="repo_scouting",
-                status="complete",
-                data={"summary": scout_out.summary[:500], "tools_used": scout_out.tools_used},
-            )
-        except Exception as exc:
-            logger.warning(f"[Orchestrator] RepoScout: {exc} - continuing without GitHub data")
-            state.errors.append(f"repo_scout: {exc}")
-            yield StreamEvent(
-                event="step",
-                agent="repo_scout",
-                step="repo_scouting",
-                status="error",
-                data={"error": str(exc)},
-            )
 
         yield StreamEvent(
             event="step",
@@ -234,117 +322,152 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        yield StreamEvent(
-            event="step",
-            agent="web_searcher",
-            step="web_search",
-            status="running",
-            data={"message": "Searching web for known issues"},
-        )
         web_context = "No supplementary web intelligence available."
         if state.document_context:
             web_context = (
                 f"{web_context}\n\n=== Uploaded Document Evidence ===\n{state.document_context}"
             )
 
-        try:
-            web_out = await self._web_searcher.run(
-                WebSearchInput(query=f"{state.service} {state.incident_type} incident"),
-                service=state.service or "unknown",
-                incident_type=state.incident_type or "unknown",
-                deployment_version=state.deployment_version,
-            )
-            web_context = f"{web_out.combined_context}\n\n{web_context}"
-            state.completed_steps.append("web_search")
-            yield StreamEvent(
-                event="step",
-                agent="web_searcher",
-                step="web_search",
-                status="complete",
-                data={"results_count": len(web_out.results), "context": web_context[:400]},
-            )
-        except Exception as exc:
-            logger.warning(f"[Orchestrator] WebSearcher: {exc}")
-            state.errors.append(str(exc))
-            yield StreamEvent(
-                event="step",
-                agent="web_searcher",
-                step="web_search",
-                status="error",
-                data={"error": str(exc)},
+        if state.repo_scout_summary:
+            web_context = (
+                f"{web_context}\n\n=== Repo Scout Evidence ===\n{state.repo_scout_summary}"
             )
 
-        yield StreamEvent(
-            event="step",
-            agent="ops_analyst",
-            step="ops_diagnostics",
-            status="running",
-            data={"message": "Running operational diagnostics"},
-        )
-        try:
-            analyst_out = await self._ops_analyst.run(
-                OpsAnalystInput(
-                    task=AnalysisTask.GENERAL,
-                    payload=effective_query,
-                    service_name=state.service or "unknown",
+        if state.terraform_scout_summary:
+            web_context = f"{web_context}\n\n=== Terraform Scout Evidence ===\n{state.terraform_scout_summary}"
+
+        if "web_searcher" in enabled_agents:
+            yield StreamEvent(
+                event="step",
+                agent="web_searcher",
+                step="web_search",
+                status="running",
+                data={"message": "Searching web for known issues"},
+            )
+            try:
+                web_out = await self._web_searcher.run(
+                    WebSearchInput(query=f"{state.service} {state.incident_type} incident"),
+                    service=state.service or "unknown",
+                    incident_type=state.incident_type or "unknown",
+                    deployment_version=state.deployment_version,
                 )
-            )
-            state.ops_analyst_result = analyst_out.result
-            state.ops_analyst_tools_used = analyst_out.tools_used
-            if analyst_out.result:
-                web_context = f"{web_context}\n\n=== Ops Diagnostics ===\n{analyst_out.result}"
-            state.completed_steps.append("ops_diagnostics")
+                web_context = f"{web_out.combined_context}\n\n{web_context}"
+                state.completed_steps.append("web_search")
+                yield StreamEvent(
+                    event="step",
+                    agent="web_searcher",
+                    step="web_search",
+                    status="complete",
+                    data={"results_count": len(web_out.results), "context": web_context[:400]},
+                )
+            except Exception as exc:
+                logger.warning(f"[Orchestrator] WebSearcher: {exc}")
+                state.errors.append(str(exc))
+                yield StreamEvent(
+                    event="step",
+                    agent="web_searcher",
+                    step="web_search",
+                    status="error",
+                    data={"error": str(exc)},
+                )
+        else:
             yield StreamEvent(
                 event="step",
-                agent="ops_analyst",
-                step="ops_diagnostics",
-                status="complete",
-                data={"result": analyst_out.result[:500], "tools_used": analyst_out.tools_used},
-            )
-        except Exception as exc:
-            logger.warning(f"[Orchestrator] OpsAnalyst: {exc} - continuing without diagnostics")
-            state.errors.append(f"ops_analyst: {exc}")
-            yield StreamEvent(
-                event="step",
-                agent="ops_analyst",
-                step="ops_diagnostics",
-                status="error",
-                data={"error": str(exc)},
+                agent="web_searcher",
+                step="web_search",
+                status="skipped",
+                data={"message": "Web Intelligence disabled by user"},
             )
 
-        yield StreamEvent(
-            event="step",
-            agent="crew",
-            step="crew_enrichment",
-            status="running",
-            data={"message": "Running CrewAI intelligence crew"},
-        )
-        try:
-            crew_report = await self._crew.run(
-                service=state.service or "unknown",
-                incident_type=state.incident_type or "unknown",
-                query=effective_query,
-                deployment_version=state.deployment_version,
-                graph_summary=state.graph_context.get("graph_summary", ""),
+        if "ops_analyst" in enabled_agents:
+            yield StreamEvent(
+                event="step",
+                agent="ops_analyst",
+                step="ops_diagnostics",
+                status="running",
+                data={"message": "Running operational diagnostics"},
             )
-            web_context = f"{web_context}\n\n=== CrewAI Intelligence Report ===\n{crew_report}"
-            state.completed_steps.append("crew_enrichment")
+            try:
+                analyst_out = await self._ops_analyst.run(
+                    OpsAnalystInput(
+                        task=AnalysisTask.GENERAL,
+                        payload=effective_query,
+                        service_name=state.service or "unknown",
+                    )
+                )
+                state.ops_analyst_result = analyst_out.result
+                state.ops_analyst_tools_used = analyst_out.tools_used
+                if analyst_out.result:
+                    web_context = f"{web_context}\n\n=== Ops Diagnostics ===\n{analyst_out.result}"
+                state.completed_steps.append("ops_diagnostics")
+                yield StreamEvent(
+                    event="step",
+                    agent="ops_analyst",
+                    step="ops_diagnostics",
+                    status="complete",
+                    data={"result": analyst_out.result[:500], "tools_used": analyst_out.tools_used},
+                )
+            except Exception as exc:
+                logger.warning(f"[Orchestrator] OpsAnalyst: {exc} - continuing without diagnostics")
+                state.errors.append(f"ops_analyst: {exc}")
+                yield StreamEvent(
+                    event="step",
+                    agent="ops_analyst",
+                    step="ops_diagnostics",
+                    status="error",
+                    data={"error": str(exc)},
+                )
+        else:
+            yield StreamEvent(
+                event="step",
+                agent="ops_analyst",
+                step="ops_diagnostics",
+                status="skipped",
+                data={"message": "Ops Analyst disabled by user"},
+            )
+
+        if "crew" in enabled_agents:
             yield StreamEvent(
                 event="step",
                 agent="crew",
                 step="crew_enrichment",
-                status="complete",
-                data={"report_length": len(crew_report)},
+                status="running",
+                data={"message": "Running CrewAI intelligence crew"},
             )
-        except Exception as exc:
-            logger.warning(f"[Orchestrator] Crew: {exc}")
-            state.errors.append(str(exc))
+            try:
+                crew_report = await self._crew.run(
+                    service=state.service or "unknown",
+                    incident_type=state.incident_type or "unknown",
+                    query=effective_query,
+                    deployment_version=state.deployment_version,
+                    graph_summary=state.graph_context.get("graph_summary", ""),
+                )
+                web_context = f"{web_context}\n\n=== CrewAI Intelligence Report ===\n{crew_report}"
+                state.completed_steps.append("crew_enrichment")
+                yield StreamEvent(
+                    event="step",
+                    agent="crew",
+                    step="crew_enrichment",
+                    status="complete",
+                    data={"report_length": len(crew_report)},
+                )
+            except Exception as exc:
+                logger.warning(f"[Orchestrator] Crew: {exc}")
+                state.errors.append(str(exc))
+                yield StreamEvent(
+                    event="step",
+                    agent="crew",
+                    step="crew_enrichment",
+                    status="error",
+                    data={"error": str(exc)},
+                )
+        else:
             yield StreamEvent(
                 event="step",
                 agent="crew",
                 step="crew_enrichment",
-                status="error",
-                data={"error": str(exc)},
+                status="skipped",
+                data={"message": "Crew Intelligence disabled by user"},
             )
 
         yield StreamEvent(
@@ -447,6 +570,10 @@ class IncidentOrchestrator:
                 "repo_scout": {
                     "summary": state.repo_scout_summary,
                     "tools_used": state.repo_scout_tools_used,
+                },
+                "terraform_scout": {
+                    "summary": state.terraform_scout_summary,
+                    "tools_used": state.terraform_scout_tools_used,
                 },
                 "ops_diagnostics": {
                     "result": state.ops_analyst_result,
