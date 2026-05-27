@@ -16,16 +16,20 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock* ./
 
-ENV UV_CACHE_DIR=/root/.cache/uv
+# Use a cache dir that appuser can access at runtime
+ENV UV_CACHE_DIR=/app/.cache/uv
 ENV UV_LINK_MODE=copy
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/app/.cache/uv \
     uv sync --no-dev --no-install-project
 
 COPY --chown=appuser:appgroup . .
 
-RUN --mount=type=cache,target=/root/.cache/uv \
+RUN --mount=type=cache,target=/app/.cache/uv \
     uv sync --no-dev
+
+# Give appuser ownership of cache dir
+RUN mkdir -p /app/.cache && chown -R appuser:appgroup /app/.cache
 
 USER appuser
 
