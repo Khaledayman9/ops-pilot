@@ -13,7 +13,6 @@ langchain-anthropic>=0.1.13
 langchain-text-splitters
 langgraph>=0.2.0
 langchain-mcp-adapters>=0.2.0
-langchain-docling>=1.0.0
 
 # CrewAI
 crewai>=0.30.0
@@ -50,6 +49,9 @@ redis>=5.0.4
 python-dotenv>=1.0.0
 pyyaml>=6.0.1
 greenlet>=3.0.0
+
+# Document Processing
+markitdown>=0.1.6
 
 # Testing
 pytest>=8.2.0
