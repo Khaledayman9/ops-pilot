@@ -14,6 +14,7 @@ from app.core.security import (
 )
 from app.core.base_agent import BaseAgent
 from app.core.guardrails import apply_all as apply_guardrails, GuardrailViolation
+from app.core.secrets import decrypt_secret, encrypt_secret
 
 __all__ = [
     "llm",
@@ -30,4 +31,6 @@ __all__ = [
     "apply_guardrails",
     "GuardrailViolation",
     "BaseAgent",
+    "decrypt_secret",
+    "encrypt_secret",
 ]

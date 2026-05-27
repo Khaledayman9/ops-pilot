@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Loader2, Lock, Mail, Zap } from "lucide-react";
 import { ApiException, login } from "../../lib/apis";
+import { Github } from "lucide-react";
+import { finishOAuth, startOAuth } from "../../lib/apis";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,6 +30,20 @@ export default function LoginPage() {
       else if (err instanceof Error) setError(err.message);
       else setError("Unexpected error");
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleOAuth(provider: "google" | "github") {
+    setError("");
+    setLoading(true);
+
+    try {
+      const redirectUri = `${window.location.origin}/auth/callback?provider=${provider}`;
+      const url = await startOAuth(provider, redirectUri);
+      window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "OAuth sign in failed");
       setLoading(false);
     }
   }
@@ -61,6 +77,23 @@ export default function LoginPage() {
               <span>{error}</span>
             </div>
           )}
+          <div className="grid grid-cols-1 gap-3 mb-6">
+            <button
+              type="button"
+              onClick={() => handleOAuth("google")}
+              className="w-full flex items-center justify-center gap-2 py-3 border border-border-1 rounded-lg text-sm font-mono text-chrome-dim hover:border-plasma hover:text-plasma transition-colors"
+            >
+              Sign in with Google
+            </button>
+            <button
+              type="button"
+              onClick={() => handleOAuth("github")}
+              className="w-full flex items-center justify-center gap-2 py-3 border border-border-1 rounded-lg text-sm font-mono text-chrome-dim hover:border-plasma hover:text-plasma transition-colors"
+            >
+              <Github size={15} />
+              Sign in with GitHub
+            </button>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>

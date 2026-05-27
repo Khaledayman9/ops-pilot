@@ -21,6 +21,7 @@ class User(Base):
     hashed_password: Mapped[str | None] = mapped_column(String(128), nullable=True)
     oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     oauth_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    oauth_access_token_encrypted: Mapped[str] = mapped_column(Text, default="", nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -49,14 +50,18 @@ class UserSettings(Base):
     )
 
     llm_provider: Mapped[str] = mapped_column(String(50), default="openai", nullable=False)
-    llm_api_key: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    llm_api_key_encrypted: Mapped[str] = mapped_column(Text, default="", nullable=False)
     llm_base_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
     llm_model_name: Mapped[str] = mapped_column(String(255), default="gpt-4o", nullable=False)
     llm_temperature: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     llm_max_retries: Mapped[int] = mapped_column(default=3, nullable=False)
 
-    github_token: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    github_token_encrypted: Mapped[str] = mapped_column(Text, default="", nullable=False)
     github_repo: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+    github_use_oauth: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    terraform_token_encrypted: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    terraform_workspace: Mapped[str] = mapped_column(String(255), default="", nullable=False)
 
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

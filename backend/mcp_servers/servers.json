@@ -1,22 +1,24 @@
 {
   "github": {
     "command": "uvx",
-    "args": [
-      "mcp-server-github"
-    ],
+    "args": ["mcp-server-github"],
     "transport": "stdio",
     "env": {
       "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
     }
   },
+  "terraform": {
+    "command": "uvx",
+    "args": ["terraform-mcp-server"],
+    "transport": "stdio",
+    "env": {
+      "TF_TOKEN_app_terraform_io": "${TERRAFORM_CLOUD_TOKEN}",
+      "TERRAFORM_WORKSPACE": "${TERRAFORM_WORKSPACE}"
+    }
+  },
   "ops-inspector": {
     "command": "uv",
-    "args": [
-      "run",
-      "python",
-      "-m",
-      "mcp_servers.servers.ops_inspector"
-    ],
+    "args": ["run", "python", "-m", "mcp_servers.servers.ops_inspector"],
     "transport": "stdio"
   }
 }

@@ -34,6 +34,7 @@ async def stream_incident(
     document_context: str | None = Query(
         None, description="Markdown converted from uploaded documents"
     ),
+    enabled_agents: str | None = Query(None, description="Comma-separated enabled agent keys"),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> EventSourceResponse:
@@ -70,10 +71,12 @@ async def stream_incident(
         yield {"event": "session", "data": json.dumps({"session_id": session_id})}
 
         result_parts: list[str] = []
+        enabled = set(enabled_agents.split(",")) if enabled_agents else None
         async for event in _orchestrator.run_with_stream(
             safe_query,
             session_id,
             document_context=safe_document_context,
+            enabled_agents=enabled,
         ):
             yield {"event": event.event, "data": json.dumps(event.model_dump())}
             await chat_svc.record_execution(

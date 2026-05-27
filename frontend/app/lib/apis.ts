@@ -211,6 +211,7 @@ export function streamIncident(
   query: string,
   sessionId: string | null,
   documentContext: string,
+  enabledAgents: string[],
   onEvent: (e: StreamEvent) => void,
   onDone: (sessionId: string) => void,
   onError: (err: Error | ApiException) => void,
@@ -218,6 +219,8 @@ export function streamIncident(
   const params = new URLSearchParams({ query });
   if (sessionId) params.set("session_id", sessionId);
   if (documentContext.trim()) params.set("document_context", documentContext);
+  if (enabledAgents.length)
+    params.set("enabled_agents", enabledAgents.join(","));
 
   const token = getAccessToken();
   if (token) params.set("token", token);
@@ -266,4 +269,31 @@ export function streamIncident(
   };
 
   return () => es.close();
+}
+
+export async function startOAuth(
+  provider: "google" | "github",
+  redirectUri: string,
+): Promise<string> {
+  const params = new URLSearchParams({ redirect_uri: redirectUri });
+  const res = await fetch(
+    `${API}/api/v1/auth/oauth/${provider}/start?${params.toString()}`,
+  );
+  const body = await handleResponse<{ url: string }>(res);
+  return body.url;
+}
+
+export async function finishOAuth(
+  provider: "google" | "github",
+  code: string,
+  redirectUri: string,
+): Promise<TokenResponse> {
+  const res = await fetch(`${API}/api/v1/auth/oauth/${provider}/callback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
+  });
+  const tokens = await handleResponse<TokenResponse>(res);
+  setTokens(tokens.access_token, tokens.refresh_token);
+  return tokens;
 }

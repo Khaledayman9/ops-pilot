@@ -17,26 +17,23 @@ import {
   Bot,
   Brain,
   CheckCircle2,
-  ChevronDown,
+  FileSearch,
   FileText,
   GitBranch,
   History,
-  LogIn,
   Network,
   Paperclip,
   Plus,
   Send,
-  Settings,
   Shield,
   Sparkles,
   Terminal,
   Trash2,
-  User,
-  UserPlus,
+  Wrench,
   Workflow,
   Zap,
 } from "lucide-react";
-import { getAccessToken, streamIncident, uploadDocuments } from "../lib/apis";
+import { streamIncident, uploadDocuments } from "../lib/apis";
 
 type Message = {
   role: "user" | "assistant";
@@ -57,7 +54,23 @@ type Attachment = {
   characters: number;
 };
 
+type ExplainabilityEvent = {
+  agent: string;
+  step: string;
+  status: string;
+  detail: string;
+};
+
 const STORAGE_KEY = "ops_pilot_chat_sessions_v3";
+
+const requiredAgentKeys = new Set([
+  "orchestrator",
+  "classifier",
+  "entity_extractor",
+  "graph_analyzer",
+  "root_cause_finder",
+  "remediator",
+]);
 
 const agentTimeline = [
   {
@@ -66,6 +79,7 @@ const agentTimeline = [
     icon: Workflow,
     color: "#00ccff",
     status: "Routes the turn",
+    required: true,
   },
   {
     name: "Document Processor",
@@ -73,6 +87,7 @@ const agentTimeline = [
     icon: FileText,
     color: "#00ff88",
     status: "Adds document context",
+    required: true,
   },
   {
     name: "Classifier",
@@ -80,6 +95,7 @@ const agentTimeline = [
     icon: Bot,
     color: "#00ff88",
     status: "Sets severity",
+    required: true,
   },
   {
     name: "Entity Extractor",
@@ -87,6 +103,7 @@ const agentTimeline = [
     icon: Terminal,
     color: "#00ccff",
     status: "Parses context",
+    required: true,
   },
   {
     name: "Repo Scanner",
@@ -94,6 +111,15 @@ const agentTimeline = [
     icon: GitBranch,
     color: "#00ff88",
     status: "Checks code changes",
+    required: false,
+  },
+  {
+    name: "Terraform Scanner",
+    key: "terraform_scout",
+    icon: Wrench,
+    color: "#7c5cff",
+    status: "Checks IaC drift",
+    required: false,
   },
   {
     name: "Graph Analyzer",
@@ -101,6 +127,15 @@ const agentTimeline = [
     icon: Network,
     color: "#ffaa00",
     status: "Maps blast radius",
+    required: true,
+  },
+  {
+    name: "Web Intelligence",
+    key: "web_searcher",
+    icon: FileSearch,
+    color: "#ff4444",
+    status: "Checks external signals",
+    required: false,
   },
   {
     name: "Ops Analyst",
@@ -108,6 +143,15 @@ const agentTimeline = [
     icon: Activity,
     color: "#ffaa00",
     status: "Reads telemetry",
+    required: false,
+  },
+  {
+    name: "Crew Intelligence",
+    key: "crew",
+    icon: Sparkles,
+    color: "#00ccff",
+    status: "Synthesizes evidence",
+    required: false,
   },
   {
     name: "Root Cause Analyzer",
@@ -115,6 +159,7 @@ const agentTimeline = [
     icon: Brain,
     color: "#00ccff",
     status: "Builds causal chain",
+    required: true,
   },
   {
     name: "Remediator",
@@ -122,6 +167,7 @@ const agentTimeline = [
     icon: Shield,
     color: "#00ff88",
     status: "Writes action plan",
+    required: true,
   },
 ];
 
@@ -141,7 +187,7 @@ function newSession(): ChatSessionLocal {
       {
         role: "assistant",
         content:
-          "Ops-Pilot is ready. Paste an incident summary or upload PDFs, DOCX, PPTX, HTML, Excel, CSV, Markdown, or text files. Uploaded documents are converted to markdown and sent with the same chat turn.",
+          "Ops-Pilot is ready. Paste an incident summary or upload supported documents: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, HTML, Markdown, CSV, and TXT. Uploaded documents are converted to markdown by the Document Processor and sent with the same chat turn.",
       },
     ],
   };
@@ -199,10 +245,16 @@ export default function ChatPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
+  const [enabledAgentKeys, setEnabledAgentKeys] = useState<string[]>(
+    agentTimeline.map((agent) => agent.key),
+  );
   const [activeAgentKeys, setActiveAgentKeys] = useState<string[]>([
     "orchestrator",
   ]);
+  const [explainabilityEvents, setExplainabilityEvents] = useState<
+    ExplainabilityEvent[]
+  >([]);
+
   const fileRef = useRef<HTMLInputElement>(null);
   const stopStreamRef = useRef<(() => void) | null>(null);
 
@@ -213,8 +265,9 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (sessions.length)
+    if (sessions.length) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    }
   }, [sessions]);
 
   useEffect(() => {
@@ -224,7 +277,6 @@ export default function ChatPage() {
   const activeSession =
     sessions.find((session) => session.id === activeId) ?? sessions[0];
   const messages = activeSession?.messages ?? [];
-  const isAuthed = Boolean(getAccessToken());
 
   const activeAgents = useMemo(
     () => agentTimeline.filter((agent) => activeAgentKeys.includes(agent.key)),
@@ -248,6 +300,7 @@ export default function ChatPage() {
     setInput("");
     setAttachments([]);
     setActiveAgentKeys(["orchestrator"]);
+    setExplainabilityEvents([]);
   }
 
   function deleteSession(id: string) {
@@ -311,6 +364,37 @@ export default function ChatPage() {
     });
   }
 
+  function recordExplainabilityEvent(event: {
+    agent?: string;
+    step?: string;
+    event: string;
+    status?: string;
+    data?: Record<string, unknown> | string | null;
+  }) {
+    const data =
+      event.data && typeof event.data === "object"
+        ? (event.data as Record<string, unknown>)
+        : {};
+
+    setExplainabilityEvents((prev) => [
+      ...prev,
+      {
+        agent: event.agent ?? "system",
+        step: event.step ?? event.event,
+        status: event.status ?? "running",
+        detail:
+          String(
+            data.message ??
+              data.operation ??
+              data.query ??
+              data.context ??
+              data.summary ??
+              "",
+          ).slice(0, 240) || "Step updated",
+      },
+    ]);
+  }
+
   function submitIncident(event?: FormEvent<HTMLFormElement>, prompt?: string) {
     event?.preventDefault();
 
@@ -347,6 +431,7 @@ export default function ChatPage() {
     setInput("");
     setAttachments([]);
     setRunning(true);
+    setExplainabilityEvents([]);
     setActiveAgentKeys([
       "orchestrator",
       ...(documentContext ? ["document_processor"] : []),
@@ -357,11 +442,16 @@ export default function ChatPage() {
       text || "Analyze uploaded document context.",
       activeSession.backendSessionId,
       documentContext,
+      enabledAgentKeys,
       (event) => {
         if (event.agent) {
           setActiveAgentKeys((prev) =>
             Array.from(new Set([...prev, event.agent as string])),
           );
+        }
+
+        if (event.agent || event.step) {
+          recordExplainabilityEvent(event);
         }
 
         if (
@@ -383,11 +473,12 @@ export default function ChatPage() {
         }
       },
       (sessionId) => {
-        if (sessionId)
+        if (sessionId) {
           updateActiveSession((session) => ({
             ...session,
             backendSessionId: sessionId,
           }));
+        }
         setRunning(false);
       },
       (error) => {
@@ -409,7 +500,7 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-void grid-bg text-chrome">
       <nav className="border-b border-border-1 bg-void/80 backdrop-blur-md">
-        <div className="max-w-[1600px] mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-[1760px] mx-auto px-6 h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-chrome hover:text-plasma transition-colors"
@@ -420,59 +511,10 @@ export default function ChatPage() {
               ops<span className="text-plasma">-pilot</span>
             </span>
           </Link>
-
-          <div className="relative">
-            <button
-              onClick={() => setProfileOpen((open) => !open)}
-              className="flex items-center gap-2 px-3 py-2 border border-border-1 rounded-lg text-xs font-mono text-chrome-dim hover:border-plasma hover:text-plasma transition-colors"
-            >
-              <User size={14} />
-              Profile
-              <ChevronDown size={13} />
-            </button>
-
-            {profileOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-surface-1 border border-border-1 rounded-lg p-2 shadow-xl z-50">
-                {isAuthed ? (
-                  <Link
-                    href="/profile"
-                    className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-                  >
-                    <User size={13} />
-                    View profile
-                  </Link>
-                ) : (
-                  <>
-                    <Link
-                      href="/login"
-                      className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-                    >
-                      <LogIn size={13} />
-                      Login
-                    </Link>
-                    <Link
-                      href="/register"
-                      className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-                    >
-                      <UserPlus size={13} />
-                      Register
-                    </Link>
-                  </>
-                )}
-                <Link
-                  href="/settings"
-                  className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-                >
-                  <Settings size={13} />
-                  Settings
-                </Link>
-              </div>
-            )}
-          </div>
         </div>
       </nav>
 
-      <main className="max-w-[1600px] mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-[260px_250px_minmax(0,1fr)] gap-5">
+      <main className="max-w-[1760px] mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-[250px_270px_minmax(0,1fr)] 2xl:grid-cols-[250px_270px_minmax(0,1fr)_330px] gap-5">
         <aside className="bg-surface-1 border border-border-1 rounded-xl p-4 h-[calc(100vh-6.5rem)] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -528,12 +570,14 @@ export default function ChatPage() {
             <div className="space-y-3">
               {agentTimeline.map((agent) => {
                 const active = activeAgents.some((a) => a.key === agent.key);
+                const enabled = enabledAgentKeys.includes(agent.key);
+                const toggleDisabled = requiredAgentKeys.has(agent.key);
 
                 return (
                   <motion.div
                     key={agent.name}
                     initial={{ opacity: 0.45 }}
-                    animate={{ opacity: active ? 1 : 0.45 }}
+                    animate={{ opacity: active ? 1 : enabled ? 0.82 : 0.38 }}
                     className="flex items-center gap-3"
                   >
                     <div className="w-8 h-8 rounded border border-border-1 bg-surface-2 flex items-center justify-center">
@@ -542,7 +586,8 @@ export default function ChatPage() {
                         style={{ color: active ? agent.color : "#888888" }}
                       />
                     </div>
-                    <div className="min-w-0">
+
+                    <div className="min-w-0 flex-1">
                       <div className="text-xs font-mono text-chrome truncate">
                         {agent.name}
                       </div>
@@ -550,8 +595,39 @@ export default function ChatPage() {
                         {agent.status}
                       </div>
                     </div>
+
+                    {!toggleDisabled && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEnabledAgentKeys((prev) =>
+                            prev.includes(agent.key)
+                              ? prev.filter((key) => key !== agent.key)
+                              : [...prev, agent.key],
+                          )
+                        }
+                        className={`w-8 h-4 rounded-full border transition-colors ${
+                          enabled
+                            ? "border-plasma bg-plasma/20"
+                            : "border-border-2 bg-surface-2"
+                        }`}
+                        title={enabled ? "Enabled" : "Disabled"}
+                      >
+                        <span
+                          className={`block w-3 h-3 rounded-full bg-current transition-transform ${
+                            enabled
+                              ? "translate-x-4 text-plasma"
+                              : "translate-x-0.5 text-chrome-dim"
+                          }`}
+                        />
+                      </button>
+                    )}
+
                     {active && (
-                      <CheckCircle2 size={13} className="ml-auto text-plasma" />
+                      <CheckCircle2
+                        size={13}
+                        className="text-plasma shrink-0"
+                      />
                     )}
                   </motion.div>
                 );
@@ -669,6 +745,50 @@ export default function ChatPage() {
             </button>
           </form>
         </section>
+
+        <aside className="hidden 2xl:flex bg-surface-1 border border-border-1 rounded-xl h-[calc(100vh-6.5rem)] flex-col overflow-hidden">
+          <div className="border-b border-border-1 p-4">
+            <div className="flex items-center gap-2">
+              <Network size={16} className="text-plasma" />
+              <h2 className="font-display font-semibold text-sm">
+                Explainability
+              </h2>
+            </div>
+            <p className="text-[11px] text-chrome-dim font-mono mt-1">
+              Live graph queries and agent operations
+            </p>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {explainabilityEvents.length === 0 ? (
+              <p className="text-xs text-chrome-dim font-mono">
+                Run an incident to see graph operations and active agent work.
+              </p>
+            ) : (
+              explainabilityEvents.map((event, index) => (
+                <div
+                  key={`${event.agent}-${event.step}-${index}`}
+                  className="border border-border-1 rounded-lg p-3 bg-surface-2"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-xs text-plasma font-mono truncate">
+                      {event.agent}
+                    </span>
+                    <span className="text-[10px] text-chrome-dim font-mono">
+                      {event.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-chrome font-mono mb-1">
+                    {event.step}
+                  </div>
+                  <p className="text-[11px] text-chrome-dim font-mono leading-relaxed">
+                    {event.detail}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </aside>
       </main>
     </div>
   );

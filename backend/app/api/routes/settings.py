@@ -10,6 +10,7 @@ from app.schemas.settings import (
     GitHubConfigPayload,
     LLMConfigPayload,
     SettingsResponse,
+    TerraformConfigPayload,
     UserPreferencesPayload,
     UserPreferencesResponse,
 )
@@ -27,6 +28,11 @@ async def update_llm_config(payload: LLMConfigPayload) -> SettingsResponse:
 @router.post("/github", response_model=SettingsResponse)
 async def update_github_config(payload: GitHubConfigPayload) -> SettingsResponse:
     return SettingsService().update_runtime_github(payload)
+
+
+@router.post("/terraform", response_model=SettingsResponse)
+async def update_terraform_config(payload: TerraformConfigPayload) -> SettingsResponse:
+    return SettingsService().update_runtime_terraform(payload)
 
 
 @router.get("/preferences", response_model=UserPreferencesResponse)
@@ -55,6 +61,7 @@ async def get_current_settings() -> dict:
         "llm_max_retries": settings.LLM_MAX_RETRIES,
         "openai_base_url": settings.OPENAI_BASE_URL,
         "github_token_set": bool(settings.GITHUB_TOKEN),
+        "terraform_token_set": bool(__import__("os").environ.get("TERRAFORM_CLOUD_TOKEN")),
         "pii_scrubbing": settings.ENABLE_PII_SCRUBBING,
         "injection_protection": settings.ENABLE_PROMPT_INJECTION_PROTECTION,
     }

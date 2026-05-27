@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.secrets import encrypt_secret
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -76,6 +77,7 @@ class AuthService:
         email = profile["email"]
         subject = profile["sub"]
         username = profile.get("username") or email.split("@")[0]
+        provider_access_token = profile.get("access_token", "")
 
         result = await self._db.execute(
             select(User).where((User.oauth_provider == provider) & (User.oauth_subject == subject))
@@ -90,6 +92,7 @@ class AuthService:
             base_username = username.replace(" ", "_").replace("-", "_")[:48]
             candidate = base_username
             suffix = 1
+
             while True:
                 existing = await self._db.execute(select(User).where(User.username == candidate))
                 if not existing.scalar_one_or_none():
@@ -103,6 +106,9 @@ class AuthService:
                 hashed_password=None,
                 oauth_provider=provider,
                 oauth_subject=subject,
+                oauth_access_token_encrypted=encrypt_secret(provider_access_token)
+                if provider_access_token
+                else "",
                 is_verified=True,
             )
             self._db.add(user)
@@ -110,6 +116,8 @@ class AuthService:
             user.oauth_provider = user.oauth_provider or provider
             user.oauth_subject = user.oauth_subject or subject
             user.is_verified = True
+            if provider_access_token:
+                user.oauth_access_token_encrypted = encrypt_secret(provider_access_token)
 
         await self._db.commit()
         await self._db.refresh(user)
@@ -133,7 +141,8 @@ class AuthService:
                 },
             )
             token_res.raise_for_status()
-            access_token = token_res.json()["access_token"]
+            token_body = token_res.json()
+            access_token = token_body["access_token"]
 
             profile_res = await client.get(
                 "https://www.googleapis.com/oauth2/v3/userinfo",
@@ -146,6 +155,7 @@ class AuthService:
             "sub": profile["sub"],
             "email": profile["email"],
             "username": profile.get("name") or profile["email"].split("@")[0],
+            "access_token": access_token,
         }
 
     async def _github_profile(self, code: str, redirect_uri: str) -> dict[str, str]:
@@ -166,7 +176,8 @@ class AuthService:
                 },
             )
             token_res.raise_for_status()
-            access_token = token_res.json()["access_token"]
+            token_body = token_res.json()
+            access_token = token_body["access_token"]
 
             user_res = await client.get(
                 "https://api.github.com/user",
@@ -196,6 +207,7 @@ class AuthService:
             "sub": str(gh_user["id"]),
             "email": email,
             "username": gh_user.get("login") or email.split("@")[0],
+            "access_token": access_token,
         }
 
     def _tokens_for_user(self, user: User) -> TokenResponse:
@@ -238,7 +250,8 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Token type mismatch."
             )
 
-        result = await self._db.execute(select(User).where(User.id == uuid.UUID(payload["sub"])))
+        user_id = uuid.UUID(payload["sub"])
+        result = await self._db.execute(select(User).where(User.id == user_id))
         user: User | None = result.scalar_one_or_none()
         if not user or not user.is_active:
             raise HTTPException(
