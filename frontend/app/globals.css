@@ -19,20 +19,20 @@
 }
 
 [data-theme="light"] {
-  --plasma: #008f6b;
-  --plasma-dim: #00785b;
-  --ember: #d63f4a;
-  --amber: #b87800;
-  --ice: #0077b6;
-  --void: #eef5f8;
-  --obsidian: #e4edf2;
-  --surface-1: #f7fbfd;
-  --surface-2: #e9f1f5;
-  --surface-3: #dce8ee;
-  --border-1: #bfd0da;
-  --border-2: #8fa8b6;
-  --chrome: #10242d;
-  --chrome-dim: #55717e;
+  --plasma: #007f5f;
+  --plasma-dim: #00684f;
+  --ember: #b93442;
+  --amber: #8f5d00;
+  --ice: #096f93;
+  --void: #dfe8ec;
+  --obsidian: #d4e0e6;
+  --surface-1: #edf3f6;
+  --surface-2: #d8e4ea;
+  --surface-3: #c8d7df;
+  --border-1: #9fb5c0;
+  --border-2: #6f8997;
+  --chrome: #071a20;
+  --chrome-dim: #2f4b56;
 }
 
 * {
