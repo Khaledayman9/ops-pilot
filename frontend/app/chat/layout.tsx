@@ -1,3 +1,7 @@
-export default function ChatLayout({ children }: { children: React.ReactNode }) {
-    return <div className="h-screen overflow-hidden bg-void">{children}</div>;
-  }
+export default function ChatLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <>{children}</>;
+}

@@ -8,54 +8,73 @@ on:
 
 jobs:
   backend-lint:
-    name: Backend — Ruff
+    name: Backend - Ruff
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff
+
+      - name: Install ruff
+        run: pip install ruff
+
       - name: Ruff lint check
         run: ruff check app/ tests/ --output-format=github
+
       - name: Ruff format check
         run: ruff format app/ tests/ --check
 
   frontend-lint:
-    name: Frontend — ESLint + Prettier
+    name: Frontend - ESLint + TypeScript
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - run: npm install --legacy-peer-deps
-      - name: ESLint
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      # next lint uses ESLint v9 flat config — no extra flags needed
+      - name: ESLint (next lint)
         run: npm run lint
-      - name: TypeScript check
+
+      - name: TypeScript type check
         run: npx tsc --noEmit
 
   commit-lint:
     name: Conventional Commit Lint
     runs-on: ubuntu-latest
+    # Only run on pull requests (needs a base SHA to compare against)
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
       - name: Install commitlint
         run: |
           npm install --global @commitlint/cli @commitlint/config-conventional
+
       - name: Lint commit messages
         run: |
-          commitlint --from ${{ github.event.pull_request.base.sha || 'HEAD~1' }} \
-                     --to   ${{ github.event.pull_request.head.sha || 'HEAD' }} \
-                     --verbose
+          commitlint \
+            --from "${{ github.event.pull_request.base.sha }}" \
+            --to   "${{ github.event.pull_request.head.sha }}" \
+            --verbose

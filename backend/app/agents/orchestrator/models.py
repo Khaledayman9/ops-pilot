@@ -13,6 +13,10 @@ class IncidentState(BaseModel):
     trigger_event: str | None = None
     classification: dict = Field(default_factory=dict)
 
+    # Document processor output
+    document_context: str = ""
+    document_context_chars: int = 0
+
     # Entity extractor output
     entities: dict = Field(default_factory=dict)
 

@@ -32,3 +32,12 @@ class TokenResponse(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class OAuthStartResponse(BaseModel):
+    url: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    redirect_uri: str

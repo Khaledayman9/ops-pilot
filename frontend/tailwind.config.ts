@@ -24,8 +24,8 @@ const config: Config = {
         "border-2": "#3a3a50",
       },
       fontFamily: {
-        mono: ["'JetBrains Mono'", "monospace"],
-        display: ["'Space Grotesk'", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "JetBrains Mono", "monospace"],
+        display: ["var(--font-space-grotesk)", "Space Grotesk", "sans-serif"],
       },
     },
   },

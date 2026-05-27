@@ -1,27 +1,37 @@
-// frontend/app/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
-  Zap,
-  ArrowRight,
-  Network,
-  GitBranch,
   Activity,
-  Shield,
-  Layers,
-  Clock,
-  Terminal,
   AlertTriangle,
+  ArrowRight,
+  Bot,
+  Brain,
+  CheckCircle2,
+  Clock,
+  Code2,
+  Database,
+  FileSearch,
+  GitBranch,
+  HelpCircle,
+  LifeBuoy,
+  Mail,
+  Network,
+  Radar,
+  ScanSearch,
+  FileText,
+  Shield,
+  Sparkles,
+  Terminal,
+  Workflow,
+  Zap,
 } from "lucide-react";
 
-// anime.js loaded dynamically (SSR-safe)
 type AnimeInstance = { pause: () => void };
-type AnimeStatic = {
-  (params: Record<string, unknown>): AnimeInstance;
-};
+type AnimeStatic = { (params: Record<string, unknown>): AnimeInstance };
+
 let anime: AnimeStatic | null = null;
 
 async function loadAnime() {
@@ -30,15 +40,34 @@ async function loadAnime() {
   anime = (mod.default ?? mod) as unknown as AnimeStatic;
 }
 
-const GRAPH_NODES = [
+const graphNodes = [
   { id: "api", x: 80, y: 80, label: "api-gateway", status: "healthy" },
   { id: "checkout", x: 240, y: 50, label: "checkout", status: "critical" },
-  { id: "payment", x: 400, y: 80, label: "payment-service", status: "degraded" },
-  { id: "inventory", x: 400, y: 170, label: "inventory-service", status: "healthy" },
+  {
+    id: "payment",
+    x: 400,
+    y: 80,
+    label: "payment-service",
+    status: "degraded",
+  },
+  {
+    id: "inventory",
+    x: 400,
+    y: 170,
+    label: "inventory-service",
+    status: "healthy",
+  },
   { id: "redis", x: 240, y: 180, label: "redis-cache", status: "degraded" },
-  { id: "postgres", x: 550, y: 125, label: "postgres-primary", status: "healthy" },
+  {
+    id: "postgres",
+    x: 550,
+    y: 125,
+    label: "postgres-primary",
+    status: "healthy",
+  },
 ];
-const GRAPH_EDGES = [
+
+const graphEdges = [
   ["api", "checkout"],
   ["checkout", "payment"],
   ["checkout", "redis"],
@@ -46,59 +75,298 @@ const GRAPH_EDGES = [
   ["payment", "postgres"],
   ["inventory", "postgres"],
 ];
-const STATUS_COLOR: Record<string, string> = {
+
+const statusColor: Record<string, string> = {
   healthy: "#00ff88",
   degraded: "#ffaa00",
   critical: "#ff4444",
 };
 
-const SIM_LINES = [
-  { t: 0, txt: "$ ops-pilot analyze --query 'checkout latency spike'", color: "#00ff88" },
-  { t: 600, txt: "> [classifier]   service=checkout-service severity=P1", color: "#e0e0e0" },
-  { t: 1300, txt: "> [entity_extractor] entities=6 deployments=['v2.3.1']", color: "#e0e0e0" },
-  { t: 2100, txt: "> [graph_analyzer]   blast_radius=4 upstream=['api-gateway']", color: "#ffaa00" },
-  { t: 2900, txt: "> [root_cause_finder] cause='memory leak in v2.3.1' conf=0.91", color: "#00ccff" },
-  { t: 3700, txt: "> [remediator]    rollback=v2.3.0 runbook=RB-001", color: "#e0e0e0" },
-  { t: 4400, txt: "Analysis complete in 4.2s", color: "#00ff88" },
+const simLines = [
+  {
+    t: 0,
+    txt: "$ ops-pilot analyze --query 'checkout latency spike'",
+    color: "#00ff88",
+  },
+  {
+    t: 500,
+    txt: "> [orchestrator] route=incident_graph priority=P1",
+    color: "#00ccff",
+  },
+  {
+    t: 1000,
+    txt: "> [classifier] service=checkout-service severity=P1",
+    color: "#e0e0e0",
+  },
+  {
+    t: 1500,
+    txt: "> [entity_extractor] entities=6 deployment=v2.3.1",
+    color: "#e0e0e0",
+  },
+  {
+    t: 2100,
+    txt: "> [repo_scanner] suspect_commit=9f32c1 owner=payments",
+    color: "#ffaa00",
+  },
+  {
+    t: 2700,
+    txt: "> [ops_analyst] cpu=91% latency_p95=4.8s error_rate=12%",
+    color: "#ffaa00",
+  },
+  {
+    t: 3300,
+    txt: "> [graph_analyzer] blast_radius=4 upstream=api-gateway",
+    color: "#ffaa00",
+  },
+  {
+    t: 3900,
+    txt: "> [root_cause_analyzer] cause='memory leak in v2.3.1' confidence=0.91",
+    color: "#00ff88",
+  },
+  {
+    t: 4600,
+    txt: "> [remediator] rollback=v2.3.0 runbook=RB-001",
+    color: "#e0e0e0",
+  },
+  { t: 5200, txt: "Analysis complete in 5.2s", color: "#00ff88" },
 ];
 
-const STATS = [
-  { label: "Mean Time to Detect", value: "< 30s", sub: "vs 18min industry avg" },
-  { label: "Root Cause Accuracy", value: "94%", sub: "across 2k+ incidents" },
-  { label: "Agent Steps", value: "7", sub: "classifier to remediator" },
-  { label: "Graph Nodes Traversed", value: "inf", sub: "bounded by blast radius" },
+const stats = [
+  {
+    label: "Agents Coordinated",
+    value: "10",
+    sub: "orchestrator plus specialists",
+  },
+  {
+    label: "Mean Time to Detect",
+    value: "< 30s",
+    sub: "from signal to triage",
+  },
+  {
+    label: "Root Cause Confidence",
+    value: "91%",
+    sub: "evidence weighted output",
+  },
+  {
+    label: "Graph Nodes Traversed",
+    value: "inf",
+    sub: "bounded by blast radius",
+  },
 ];
 
-const FEATURES = [
-  { icon: Network, title: "Graph Traversal", desc: "Neo4j dependency graph computes exact blast radius across your service mesh.", accent: "#00ff88" },
-  { icon: Activity, title: "Live Streaming", desc: "Every agent step SSE-streams to your UI. Zero polling, true real-time.", accent: "#00ccff" },
-  { icon: GitBranch, title: "Deployment Correlation", desc: "Automatically links incidents to recent deployments with temporal analysis.", accent: "#ffaa00" },
-  { icon: Shield, title: "Structured LLM Output", desc: "Every LLM call uses with_structured_output. No free-text, no drift.", accent: "#ff4444" },
-  { icon: Clock, title: "Historical Patterns", desc: "Graph-stored historical incidents surface recurring failure signatures.", accent: "#00ff88" },
-  { icon: Layers, title: "7-Agent Orchestration", desc: "LangGraph pipeline with CrewAI web enrichment + guardrails at every step.", accent: "#00ccff" },
+const agents = [
+  {
+    name: "Orchestrator",
+    icon: Workflow,
+    color: "#00ccff",
+    role: "Owns the run, chooses the next agent, merges evidence, and stops loops when confidence is high enough.",
+  },
+  {
+    name: "Classifier",
+    icon: Radar,
+    color: "#00ff88",
+    role: "Classifies severity, service, incident type, and urgency from the incoming incident text.",
+  },
+  {
+    name: "Entity Extractor",
+    icon: ScanSearch,
+    color: "#00ccff",
+    role: "Extracts services, deployments, logs, metric names, owners, runbooks, and timestamps.",
+  },
+  {
+    name: "Document Processor",
+    icon: FileText,
+    color: "#00ff88",
+    role: "Converts PDF, DOCX, PPTX, HTML, Excel, CSV, Markdown, and text",
+  },
+  {
+    name: "Graph Analyzer",
+    icon: Network,
+    color: "#ffaa00",
+    role: "Queries Neo4j for dependencies, upstream/downstream blast radius, owners, and known runbooks.",
+  },
+  {
+    name: "Repo Scanner",
+    icon: GitBranch,
+    color: "#00ff88",
+    role: "Inspects recent commits, PRs, releases, and deployment metadata for suspicious changes.",
+  },
+  {
+    name: "Ops Analyst",
+    icon: Activity,
+    color: "#ffaa00",
+    role: "Reads operational telemetry patterns such as latency, saturation, error rate, and resource pressure.",
+  },
+  {
+    name: "Web Intelligence",
+    icon: FileSearch,
+    color: "#ff4444",
+    role: "Collects external signals such as provider incidents, CVEs, and dependency advisories.",
+  },
+  {
+    name: "Root Cause Analyzer",
+    icon: Brain,
+    color: "#00ccff",
+    role: "Builds the causal chain. This is what RCA means: root cause analysis, not a separate product.",
+  },
+  {
+    name: "Remediator",
+    icon: Shield,
+    color: "#00ff88",
+    role: "Generates rollback steps, mitigation commands, owner escalation, validation checks, and runbook links.",
+  },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _Terminal = Terminal; // imported for potential future use
+const features = [
+  {
+    icon: Workflow,
+    title: "Orchestrated Agent Routing",
+    desc: "The orchestrator decides which specialist runs next and carries forward structured state.",
+    accent: "#00ccff",
+  },
+  {
+    icon: Network,
+    title: "Service Graph Reasoning",
+    desc: "Neo4j dependency traversal explains blast radius instead of guessing from logs alone.",
+    accent: "#00ff88",
+  },
+  {
+    icon: GitBranch,
+    title: "Repo and Deployment Correlation",
+    desc: "Repo Scanner connects recent code changes to incident symptoms and owners.",
+    accent: "#ffaa00",
+  },
+  {
+    icon: Activity,
+    title: "Ops Telemetry Analysis",
+    desc: "Ops Analyst compares latency, errors, saturation, and resource pressure against the incident timeline.",
+    accent: "#ff4444",
+  },
+  {
+    icon: Terminal,
+    title: "Live Agent Streaming",
+    desc: "Each step can stream to the UI so operators see evidence while the system reasons.",
+    accent: "#00ccff",
+  },
+  {
+    icon: Shield,
+    title: "Actionable Remediation",
+    desc: "The final answer includes rollback, mitigation, escalation, and verification steps.",
+    accent: "#00ff88",
+  },
+];
+
+const orchestrationSteps = [
+  "Incident enters the Orchestrator",
+  "Classifier and Entity Extractor normalize the request",
+  "Graph Analyzer, Repo Scanner, Ops Analyst, and Web Intelligence collect evidence in parallel",
+  "Root Cause Analyzer weighs evidence and explains the causal chain",
+  "Remediator produces the operator-ready response",
+];
+
+const particlePositions = [
+  { left: "8%", top: "18%" },
+  { left: "14%", top: "72%" },
+  { left: "21%", top: "34%" },
+  { left: "28%", top: "84%" },
+  { left: "33%", top: "12%" },
+  { left: "39%", top: "59%" },
+  { left: "45%", top: "27%" },
+  { left: "51%", top: "76%" },
+  { left: "57%", top: "16%" },
+  { left: "63%", top: "45%" },
+  { left: "69%", top: "88%" },
+  { left: "74%", top: "23%" },
+  { left: "79%", top: "63%" },
+  { left: "84%", top: "38%" },
+  { left: "89%", top: "79%" },
+  { left: "94%", top: "14%" },
+];
+
+function Nav() {
+  return (
+    <nav className="fixed top-0 w-full z-50 border-b border-border-1 bg-void/80 backdrop-blur-md">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2">
+          <Zap size={18} className="text-plasma" />
+          <span className="font-display font-semibold text-chrome tracking-tight">
+            ops<span className="text-plasma">-pilot</span>
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-5 text-xs font-mono">
+          <a
+            href="#orchestration"
+            className="text-chrome-dim hover:text-plasma transition-colors hidden md:block"
+          >
+            Orchestration
+          </a>
+          <a
+            href="#capabilities"
+            className="text-chrome-dim hover:text-plasma transition-colors hidden md:block"
+          >
+            Capabilities
+          </a>
+          <Link
+            href="/help"
+            className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block"
+          >
+            Help
+          </Link>
+          <Link
+            href="/contact"
+            className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block"
+          >
+            Contact
+          </Link>
+          <Link
+            href="/settings"
+            className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block"
+          >
+            Settings
+          </Link>
+          <Link
+            href="/chat"
+            className="px-4 py-1.5 bg-plasma text-void font-display font-semibold rounded text-xs hover:bg-plasma-dim transition-colors"
+          >
+            LAUNCH
+          </Link>
+        </div>
+      </div>
+    </nav>
+  );
+}
 
 function TerminalSim() {
-  const [lines, setLines] = useState<typeof SIM_LINES>([]);
+  const [lines, setLines] = useState<typeof simLines>([]);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
+    let restartTimer: ReturnType<typeof setTimeout>;
+    const lineTimers: ReturnType<typeof setTimeout>[] = [];
+
     const startSim = () => {
       setLines([]);
       setRunning(true);
-      SIM_LINES.forEach(({ t, txt, color }) => {
-        setTimeout(() => setLines((prev) => [...prev, { t, txt, color }]), t);
+
+      simLines.forEach(({ t, txt, color }) => {
+        lineTimers.push(
+          setTimeout(() => setLines((p) => [...p, { t, txt, color }]), t),
+        );
       });
-      setTimeout(() => {
+
+      restartTimer = setTimeout(() => {
         setRunning(false);
-        setTimeout(startSim, 3000);
-      }, 5500);
+        restartTimer = setTimeout(startSim, 3000);
+      }, 6200);
     };
+
     startSim();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      lineTimers.forEach(clearTimeout);
+      clearTimeout(restartTimer);
+    };
   }, []);
 
   return (
@@ -107,26 +375,21 @@ function TerminalSim() {
         <span className="w-3 h-3 rounded-full bg-[#ff4444]" />
         <span className="w-3 h-3 rounded-full bg-[#ffaa00]" />
         <span className="w-3 h-3 rounded-full bg-[#00ff88]" />
-        <span className="ml-2 text-[#888888]">ops-pilot terminal</span>
+        <span className="ml-2 text-[#888888]">orchestrator stream</span>
         {running && (
-          <motion.span
-            animate={{ opacity: [1, 0] }}
-            transition={{ repeat: Infinity, duration: 0.8, repeatType: "reverse" }}
-            className="ml-auto text-[#00ff88]"
-          >
-            RUNNING
-          </motion.span>
+          <span className="ml-auto text-[#00ff88] animate-pulse">RUNNING</span>
         )}
       </div>
-      <div className="space-y-0.5 min-h-[180px]">
-        {lines.map((l, i) => (
+
+      <div className="space-y-0.5 min-h-[230px]">
+        {lines.map((line, i) => (
           <motion.div
-            key={i}
+            key={`${line.t}-${i}`}
             initial={{ opacity: 0, x: -8 }}
             animate={{ opacity: 1, x: 0 }}
-            style={{ color: l.color }}
+            style={{ color: line.color }}
           >
-            {l.txt}
+            {line.txt}
           </motion.div>
         ))}
       </div>
@@ -140,6 +403,7 @@ function HeroGraph() {
   useEffect(() => {
     loadAnime().then(() => {
       if (!anime || !svgRef.current) return;
+
       anime({
         targets: ".hero-node",
         opacity: [0, 1],
@@ -148,6 +412,7 @@ function HeroGraph() {
         delay: (_el: unknown, i: number) => i * 120,
         easing: "easeOutBack",
       });
+
       anime({
         targets: ".hero-edge",
         strokeDashoffset: [200, 0],
@@ -155,6 +420,7 @@ function HeroGraph() {
         delay: (_el: unknown, i: number) => 400 + i * 80,
         easing: "easeInOutQuad",
       });
+
       anime({
         targets: ".hero-pulse",
         r: [6, 14],
@@ -163,49 +429,32 @@ function HeroGraph() {
         loop: true,
         easing: "easeOutExpo",
       });
-      anime({
-        targets: ".hero-packet",
-        translateX: [0, 140],
-        opacity: [0, 1, 0],
-        duration: 1800,
-        loop: true,
-        delay: (_el: unknown, i: number) => i * 600,
-        easing: "linear",
-      });
     });
   }, []);
 
   return (
     <svg ref={svgRef} viewBox="0 0 640 260" className="w-full h-full">
-      {GRAPH_EDGES.map(([a, b], i) => {
-        const na = GRAPH_NODES.find((n) => n.id === a)!;
-        const nb = GRAPH_NODES.find((n) => n.id === b)!;
+      {graphEdges.map(([a, b], i) => {
+        const na = graphNodes.find((n) => n.id === a)!;
+        const nb = graphNodes.find((n) => n.id === b)!;
+
         return (
           <line
-            key={i}
+            key={`${a}-${b}-${i}`}
             className="hero-edge"
-            x1={na.x + 55} y1={na.y + 18}
-            x2={nb.x + 55} y2={nb.y + 18}
+            x1={na.x + 55}
+            y1={na.y + 18}
+            x2={nb.x + 55}
+            y2={nb.y + 18}
             stroke="#2a2a3a"
             strokeWidth={1.5}
           />
         );
       })}
-      {GRAPH_EDGES.slice(0, 3).map(([a], i) => {
-        const na = GRAPH_NODES.find((n) => n.id === a)!;
-        return (
-          <circle
-            key={`pk-${i}`}
-            className="hero-packet"
-            cx={na.x + 55}
-            cy={na.y + 18}
-            r={3}
-            fill={i === 0 ? "#ff4444" : "#ffaa00"}
-          />
-        );
-      })}
-      {GRAPH_NODES.map((node) => {
-        const c = STATUS_COLOR[node.status];
+
+      {graphNodes.map((node) => {
+        const color = statusColor[node.status];
+
         return (
           <g key={node.id} className="hero-node" style={{ opacity: 0 }}>
             {node.status === "critical" && (
@@ -214,20 +463,32 @@ function HeroGraph() {
                 cx={node.x + 55}
                 cy={node.y + 18}
                 r={6}
-                fill={c}
+                fill={color}
                 opacity={0.5}
               />
             )}
             <rect
-              x={node.x} y={node.y} width={110} height={36} rx={6}
-              fill="#111118" stroke={c}
+              x={node.x}
+              y={node.y}
+              width={110}
+              height={36}
+              rx={6}
+              fill="#111118"
+              stroke={color}
               strokeWidth={node.status === "critical" ? 2 : 1}
-              style={{ filter: node.status === "critical" ? `drop-shadow(0 0 8px ${c}88)` : "none" }}
+              style={{
+                filter:
+                  node.status === "critical"
+                    ? `drop-shadow(0 0 8px ${color}88)`
+                    : "none",
+              }}
             />
-            <circle cx={node.x + 14} cy={node.y + 18} r={4} fill={c} />
+            <circle cx={node.x + 14} cy={node.y + 18} r={4} fill={color} />
             <text
-              x={node.x + 24} y={node.y + 23}
-              fill="#e0e0e0" fontSize={9}
+              x={node.x + 24}
+              y={node.y + 23}
+              fill="#e0e0e0"
+              fontSize={9}
               fontFamily="JetBrains Mono"
             >
               {node.label}
@@ -239,15 +500,26 @@ function HeroGraph() {
   );
 }
 
-function AnimatedCounter({ value, label, sub }: { value: string; label: string; sub: string }) {
+function AnimatedCounter({
+  value,
+  label,
+  sub,
+}: {
+  value: string;
+  label: string;
+  sub: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setVisible(true); },
+      ([entry]) => {
+        if (entry.isIntersecting) setVisible(true);
+      },
       { threshold: 0.3 },
     );
+
     if (ref.current) obs.observe(ref.current);
     return () => obs.disconnect();
   }, []);
@@ -274,7 +546,9 @@ export default function HomePage() {
   useEffect(() => {
     loadAnime().then(() => {
       if (!anime || !heroParticlesRef.current) return;
+
       const dots = heroParticlesRef.current.querySelectorAll(".hero-particle");
+
       anime({
         targets: dots,
         translateX: () => (Math.random() - 0.5) * 160,
@@ -291,61 +565,30 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-void grid-bg overflow-x-hidden">
-      {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 border-b border-border-1 bg-void/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Zap size={18} className="text-plasma" />
-            <span className="font-display font-semibold text-chrome tracking-tight">
-              ops<span className="text-plasma">-pilot</span>
-            </span>
-          </Link>
-          <div className="flex items-center gap-6 text-xs font-mono">
-            <a href="#how-it-works" className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block">
-              How it works
-            </a>
-            <a href="#features" className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block">
-              Features
-            </a>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-plasma animate-pulse" />
-              <span className="text-plasma text-xs">ONLINE</span>
-            </div>
-            <Link
-              href="/chat"
-              className="px-4 py-1.5 bg-plasma text-void font-display font-semibold rounded text-xs hover:bg-plasma-dim transition-colors"
-            >
-              LAUNCH
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <Nav />
 
-      {/* Hero */}
       <section className="relative min-h-screen flex items-center pt-14">
         <div
           ref={heroParticlesRef}
           className="absolute inset-0 overflow-hidden pointer-events-none"
         >
-          {Array.from({ length: 24 }).map((_, i) => (
+          {particlePositions.map((particle, i) => (
             <div
               key={i}
               className="hero-particle absolute w-1 h-1 rounded-full bg-plasma"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                opacity: 0,
-              }}
+              style={{ left: particle.left, top: particle.top, opacity: 0 }}
             />
           ))}
           <div
             className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[700px] rounded-full pointer-events-none"
-            style={{ background: "radial-gradient(circle, rgba(0,255,136,0.06) 0%, transparent 70%)" }}
+            style={{
+              background:
+                "radial-gradient(circle, rgba(0,255,136,0.06) 0%, transparent 70%)",
+            }}
           />
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 py-24 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-          {/* Left */}
           <div>
             <motion.div
               initial={{ opacity: 0, y: 16 }}
@@ -364,8 +607,7 @@ export default function HomePage() {
               className="font-display font-bold leading-tight mb-6"
               style={{ fontSize: "clamp(2.4rem, 5vw, 4rem)" }}
             >
-              Your AI{" "}
-              <span className="text-plasma plasma-glow">Co-Pilot</span>
+              Your AI <span className="text-plasma plasma-glow">Co-Pilot</span>
               <br />
               for Production{" "}
               <span className="text-ember ember-glow">Incidents</span>
@@ -377,9 +619,10 @@ export default function HomePage() {
               transition={{ delay: 0.3 }}
               className="text-chrome-dim text-sm leading-relaxed mb-10 max-w-lg font-mono"
             >
-              Seven specialized AI agents traverse your Neo4j service graph, correlate
-              deployments, compute blast radius, and stream a full remediation plan in
-              under 5 seconds.
+              Ops-Pilot uses an orchestrator plus eight specialist agents to
+              classify incidents, scan repositories, inspect telemetry, traverse
+              the service graph, explain root cause, and produce remediation
+              steps.
             </motion.p>
 
             <motion.div
@@ -393,194 +636,285 @@ export default function HomePage() {
                 className="group flex items-center gap-2 px-7 py-3.5 bg-plasma text-void font-display font-bold rounded-lg hover:bg-plasma-dim transition-all text-sm"
               >
                 Analyze an Incident
-                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                <ArrowRight
+                  size={16}
+                  className="group-hover:translate-x-1 transition-transform"
+                />
               </Link>
 
-
-              href="#how-it-works"
-              className="flex items-center gap-2 px-7 py-3.5 border border-border-2 text-chrome-dim rounded-lg hover:border-plasma hover:text-plasma transition-colors text-sm font-mono"
+              <a
+                href="#capabilities"
+                className="flex items-center gap-2 px-7 py-3.5 border border-border-2 text-chrome-dim rounded-lg hover:border-plasma hover:text-plasma transition-colors text-sm font-mono"
               >
-              See how it works
-            </a>
-          </motion.div>
+                See capabilities
+              </a>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="flex flex-wrap gap-2"
+            >
+              {[
+                "Orchestrator",
+                "Repo Scanner",
+                "Ops Analyst",
+                "Neo4j",
+                "LangGraph",
+                "FastAPI",
+                "Next.js 15",
+              ].map((t) => (
+                <span
+                  key={t}
+                  className="px-2.5 py-1 border border-border-1 rounded text-xs text-chrome-dim font-mono hover:border-plasma hover:text-plasma transition-colors cursor-default"
+                >
+                  {t}
+                </span>
+              ))}
+            </motion.div>
+          </div>
 
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="flex flex-wrap gap-2"
+            initial={{ opacity: 0, x: 32 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.7, delay: 0.2 }}
+            className="space-y-4"
           >
-            {["Neo4j", "LangGraph", "FastAPI", "CrewAI", "Next.js 15", "Pydantic v2"].map((t) => (
-              <span
-                key={t}
-                className="px-2.5 py-1 border border-border-1 rounded text-xs text-chrome-dim font-mono hover:border-plasma hover:text-plasma transition-colors cursor-default"
-              >
-                {t}
-              </span>
-            ))}
+            <div className="bg-surface-1 border border-border-1 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-3 text-xs font-mono text-chrome-dim">
+                <Network size={12} className="text-plasma" />
+                LIVE SERVICE DEPENDENCY GRAPH
+                <span className="ml-auto flex items-center gap-1 text-ember">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ember animate-pulse" />
+                  P1 INCIDENT
+                </span>
+              </div>
+              <div className="h-64">
+                <HeroGraph />
+              </div>
+            </div>
+            <TerminalSim />
           </motion.div>
         </div>
+      </section>
 
-        {/* Right */}
-        <motion.div
-          initial={{ opacity: 0, x: 32 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.7, delay: 0.2 }}
-          className="space-y-4"
-        >
-          <div className="bg-surface-1 border border-border-1 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3 text-xs font-mono text-chrome-dim">
-              <Network size={12} className="text-plasma" />
-              LIVE SERVICE DEPENDENCY GRAPH
-              <span className="ml-auto flex items-center gap-1 text-ember">
-                <span className="w-1.5 h-1.5 rounded-full bg-ember animate-pulse" />
-                P1 INCIDENT
-              </span>
-            </div>
-            <div className="h-64">
-              <HeroGraph />
+      <section className="border-t border-border-1 py-20">
+        <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
+          {stats.map((s) => (
+            <AnimatedCounter
+              key={s.label}
+              value={s.value}
+              label={s.label}
+              sub={s.sub}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section
+        id="orchestration"
+        className="py-32 border-t border-border-1 scroll-mt-16"
+      >
+        <div className="max-w-7xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <p className="text-xs text-plasma font-mono tracking-widest mb-4">
+              ORCHESTRATION
+            </p>
+            <h2 className="font-display text-4xl font-bold text-chrome mb-4">
+              Orchestrator-led incident workflow
+            </h2>
+            <p className="text-chrome-dim max-w-2xl mx-auto font-mono text-sm">
+              The orchestrator is the control plane. It creates the plan, calls
+              specialist agents, merges their evidence, and decides when the
+              answer is ready.
+            </p>
+          </motion.div>
+
+          <div className="space-y-6">
+            <motion.div
+              initial={{ opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="bg-surface-1 border border-border-1 rounded-xl p-6"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 rounded-lg border border-ice/50 bg-ice/10 flex items-center justify-center">
+                  <Workflow size={22} className="text-ice" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-chrome">
+                    Orchestrator
+                  </h3>
+                  <p className="text-xs text-chrome-dim font-mono">
+                    state router and evidence merger
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                {orchestrationSteps.map((step, i) => (
+                  <div
+                    key={step}
+                    className="border border-border-1 bg-surface-2 rounded-lg p-4 min-h-[112px]"
+                  >
+                    <span className="w-7 h-7 rounded border border-border-2 text-plasma text-xs font-mono flex items-center justify-center mb-3">
+                      {i + 1}
+                    </span>
+                    <p className="text-xs text-chrome-dim font-mono leading-relaxed">
+                      {step}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
+              {agents.map((agent, i) => (
+                <motion.div
+                  key={agent.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.04 }}
+                  className="bg-surface-1 border border-border-1 rounded-xl p-5 hover:border-border-2 transition-colors min-h-[220px] flex flex-col"
+                >
+                  <agent.icon
+                    size={22}
+                    className="mb-4 shrink-0"
+                    style={{ color: agent.color }}
+                  />
+                  <h3 className="font-display font-semibold text-chrome mb-2 min-h-[44px]">
+                    {agent.name}
+                  </h3>
+                  <p className="text-chrome-dim text-xs leading-relaxed font-mono">
+                    {agent.role}
+                  </p>
+                </motion.div>
+              ))}
             </div>
           </div>
-          <TerminalSim />
-        </motion.div>
-    </div>
-      </section >
+        </div>
+      </section>
 
-    {/* Stats */ }
-    < section className = "border-t border-border-1 py-20" >
-      <div className="max-w-5xl mx-auto px-6 grid grid-cols-2 md:grid-cols-4 gap-8">
-        {STATS.map((s) => (
-          <AnimatedCounter key={s.label} value={s.value} label={s.label} sub={s.sub} />
-        ))}
-      </div>
-      </section >
+      <section
+        id="capabilities"
+        className="py-32 border-t border-border-1 scroll-mt-16"
+      >
+        <div className="max-w-7xl mx-auto px-6">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-20"
+          >
+            <p className="text-xs text-plasma font-mono tracking-widest mb-4">
+              CAPABILITIES
+            </p>
+            <h2 className="font-display text-4xl font-bold text-chrome">
+              Built for SREs and incident commanders
+            </h2>
+          </motion.div>
 
-    {/* How it works */ }
-    < section id = "how-it-works" className = "py-32 border-t border-border-1" >
-      <div className="max-w-7xl mx-auto px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-20"
-        >
-          <p className="text-xs text-plasma font-mono tracking-widest mb-4">PIPELINE</p>
-          <h2 className="font-display text-4xl font-bold text-chrome mb-4">7 Agents. One Pipeline.</h2>
-          <p className="text-chrome-dim max-w-xl mx-auto font-mono text-sm">
-            LangGraph orchestrates a deterministic sequence. Each agent outputs a
-            validated Pydantic model with no free-text parsing.
-          </p>
-        </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {features.map((feature, i) => (
+              <motion.div
+                key={feature.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className="bg-surface-1 border border-border-1 rounded-xl p-6 hover:border-border-2 hover:-translate-y-1 transition-all"
+              >
+                <feature.icon
+                  size={22}
+                  className="mb-4"
+                  style={{ color: feature.accent }}
+                />
+                <h3 className="font-display font-semibold text-chrome mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-chrome-dim text-sm leading-relaxed font-mono">
+                  {feature.desc}
+                </p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-        <div className="flex flex-col md:flex-row gap-2">
+      <section className="py-24 border-t border-border-1">
+        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { n: "01", title: "Classify", icon: "⚡", color: "#00ff88", desc: "Extracts service, severity P0-P3, incident type, trigger event." },
-            { n: "02", title: "Extract", icon: "🔍", color: "#00ccff", desc: "Pulls services, deployment IDs, metrics, error codes from query." },
-            { n: "03", title: "Traverse", icon: "🕸", color: "#ffaa00", desc: "9 deep Neo4j queries: blast radius, runbooks, ownership, config drift." },
-            { n: "04", title: "Web Search", icon: "🌐", color: "#ff4444", desc: "DuckDuckGo intelligence written back into Neo4j as WebKnowledge nodes." },
-            { n: "05", title: "CrewAI", icon: "🤖", color: "#00ff88", desc: "2-agent crew: intelligence gatherer + evidence synthesiser." },
-            { n: "06", title: "RCA", icon: "🧠", color: "#00ccff", desc: "Builds a causal chain with confidence scores and deployment correlation." },
-            { n: "07", title: "Remediate", icon: "🔧", color: "#ffaa00", desc: "Rollback steps, escalation paths, and runbook references." },
-          ].map((step, i) => (
-            <motion.div
-              key={step.n}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.07 }}
-              className="flex-1 bg-surface-1 border border-border-1 rounded-xl p-4 relative group hover:border-border-2 transition-colors"
+            {
+              icon: HelpCircle,
+              title: "Need setup help?",
+              href: "/help",
+              text: "View the operator guide and troubleshooting notes.",
+            },
+            {
+              icon: Mail,
+              title: "Contact the team",
+              href: "/contact",
+              text: "Share integration details, support requests, or feedback.",
+            },
+            {
+              icon: Sparkles,
+              title: "Start analysis",
+              href: "/chat",
+              text: "Open the chat workspace and run an incident through the pipeline.",
+            },
+          ].map((item) => (
+            <Link
+              key={item.title}
+              href={item.href}
+              className="bg-surface-1 border border-border-1 rounded-xl p-6 hover:border-plasma transition-colors group"
             >
-              {i < 6 && (
-                <div className="hidden md:flex absolute -right-3 top-1/2 -translate-y-1/2 z-10 text-border-2 text-lg">
-                  &rarr;
-                </div>
-              )}
-              <div className="text-2xl mb-2">{step.icon}</div>
-              <div className="text-xs text-chrome-dim font-mono mb-1">{step.n}</div>
-              <div className="font-display font-bold text-sm mb-1" style={{ color: step.color }}>
-                {step.title}
-              </div>
-              <p className="text-chrome-dim text-xs leading-relaxed font-mono">{step.desc}</p>
-            </motion.div>
+              <item.icon size={22} className="text-plasma mb-4" />
+              <h3 className="font-display font-semibold text-chrome mb-2">
+                {item.title}
+              </h3>
+              <p className="text-chrome-dim text-sm font-mono leading-relaxed">
+                {item.text}
+              </p>
+            </Link>
           ))}
         </div>
-      </div>
-      </section >
+      </section>
 
-    {/* Features */ }
-    < section id = "features" className = "py-32 border-t border-border-1" >
-      <div className="max-w-7xl mx-auto px-6">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-20"
-        >
-          <p className="text-xs text-plasma font-mono tracking-widest mb-4">CAPABILITIES</p>
-          <h2 className="font-display text-4xl font-bold text-chrome">Built for SREs</h2>
-        </motion.div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {FEATURES.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-              className="bg-surface-1 border border-border-1 rounded-xl p-6 hover:border-border-2 hover:-translate-y-1 transition-all group"
+      <footer className="border-t border-border-1 py-8">
+        <div className="max-w-7xl mx-auto px-6 flex flex-wrap gap-4 items-center justify-between text-xs text-chrome-dim font-mono">
+          <div className="flex items-center gap-2">
+            <Zap size={12} className="text-plasma" />
+            ops-pilot v0.1.0
+          </div>
+          <div className="flex items-center gap-4">
+            <Link href="/chat" className="hover:text-plasma transition-colors">
+              Chat
+            </Link>
+            <Link href="/help" className="hover:text-plasma transition-colors">
+              Help
+            </Link>
+            <Link
+              href="/contact"
+              className="hover:text-plasma transition-colors"
             >
-              <f.icon size={22} className="mb-4" style={{ color: f.accent }} />
-              <h3 className="font-display font-semibold text-chrome mb-2">{f.title}</h3>
-              <p className="text-chrome-dim text-sm leading-relaxed font-mono">{f.desc}</p>
-            </motion.div>
-          ))}
+              Contact
+            </Link>
+            <Link
+              href="/settings"
+              className="hover:text-plasma transition-colors"
+            >
+              Settings
+            </Link>
+          </div>
         </div>
-      </div>
-      </section >
-
-    {/* CTA */ }
-    < section className = "py-32 border-t border-border-1" >
-      <div className="max-w-3xl mx-auto px-6 text-center">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-        >
-          <h2
-            className="font-display font-bold text-chrome mb-6"
-            style={{ fontSize: "clamp(2rem, 4vw, 3.5rem)" }}
-          >
-            Ready to{" "}
-            <span className="text-plasma plasma-glow">respond faster?</span>
-          </h2>
-          <p className="text-chrome-dim font-mono text-sm mb-10 max-w-xl mx-auto">
-            Paste an incident description. Watch seven AI agents work in real-time.
-            Get a structured remediation plan with rollback steps and runbooks.
-          </p>
-          <Link
-            href="/chat"
-            className="inline-flex items-center gap-3 px-10 py-4 bg-plasma text-void font-display font-bold text-lg rounded-lg hover:bg-plasma-dim transition-all group"
-          >
-            Open Ops-Pilot
-            <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </motion.div>
-      </div>
-      </section >
-
-    {/* Footer */ }
-    < footer className = "border-t border-border-1 py-8" >
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between text-xs text-chrome-dim font-mono">
-        <div className="flex items-center gap-2">
-          <Zap size={12} className="text-plasma" />
-          ops-pilot v0.1.0
-        </div>
-        <span className="hidden sm:block">AI SRE Operations Control Plane</span>
-        <div className="flex items-center gap-4">
-          <Link href="/chat" className="hover:text-plasma transition-colors">Chat</Link>
-        </div>
-      </div>
-      </footer >
-    </div >
+      </footer>
+    </div>
   );
 }

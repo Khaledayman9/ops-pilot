@@ -1,28 +1,26 @@
-"""SQLAlchemy ORM models — all tables in one place for Alembic autogenerate."""
-
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.postgres import Base
 
-__all__ = ["User", "Chat", "Message", "AgentExecution"]
+__all__ = ["User", "UserSettings", "Chat", "Message", "AgentExecution"]
 
 
 class User(Base):
-    """Application user — created at registration, referenced by JWT subject."""
-
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(128), nullable=False)
+    hashed_password: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    oauth_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    oauth_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -30,6 +28,41 @@ class User(Base):
     chats: Mapped[list["Chat"]] = relationship(
         "Chat", back_populates="owner", cascade="all, delete-orphan"
     )
+    settings: Mapped["UserSettings | None"] = relationship(
+        "UserSettings",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("oauth_provider", "oauth_subject", name="uq_users_oauth_identity"),
+    )
+
+
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
+    )
+
+    llm_provider: Mapped[str] = mapped_column(String(50), default="openai", nullable=False)
+    llm_api_key: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    llm_base_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    llm_model_name: Mapped[str] = mapped_column(String(255), default="gpt-4o", nullable=False)
+    llm_temperature: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    llm_max_retries: Mapped[int] = mapped_column(default=3, nullable=False)
+
+    github_token: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    github_repo: Mapped[str] = mapped_column(String(500), default="", nullable=False)
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    user: Mapped["User"] = relationship("User", back_populates="settings")
 
 
 class Chat(Base):

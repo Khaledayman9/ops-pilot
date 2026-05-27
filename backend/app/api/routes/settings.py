@@ -1,78 +1,53 @@
-"""
-Runtime settings endpoint.
-Allows the frontend to push LLM and GitHub config into the running process
-without a restart. Values are applied to `settings` in-process only —
-they do not persist to disk (use .env for permanent changes).
-"""
-
 from __future__ import annotations
 
-import os
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter
-
-
-from logger import logger
+from app.api.deps import get_current_user
+from app.db.models import User
+from app.db.postgres import get_db
+from app.schemas.settings import (
+    GitHubConfigPayload,
+    LLMConfigPayload,
+    SettingsResponse,
+    UserPreferencesPayload,
+    UserPreferencesResponse,
+)
+from app.services.settings_service import SettingsService
 from settings import settings
-from app.schemas.settings import SettingsResponse, GitHubConfigPayload, LLMConfigPayload
 
 router = APIRouter()
 
 
 @router.post("/llm", response_model=SettingsResponse)
 async def update_llm_config(payload: LLMConfigPayload) -> SettingsResponse:
-    """
-    Apply LLM provider settings to the running process.
-    Only non-empty values overwrite the current settings.
-    """
-    if payload.provider:
-        settings.LLM_PROVIDER = payload.provider
-    if payload.api_key:
-        settings.OPENAI_API_KEY = payload.api_key
-        settings.ANTHROPIC_API_KEY = payload.api_key
-        settings.GOOGLE_API_KEY = payload.api_key
-        # Set the correct key env var for the provider
-        provider_env = {
-            "openai": "OPENAI_API_KEY",
-            "anthropic": "ANTHROPIC_API_KEY",
-            "google": "GOOGLE_API_KEY",
-        }.get(payload.provider, "OPENAI_API_KEY")
-        os.environ[provider_env] = payload.api_key
-    if payload.base_url:
-        settings.OPENAI_BASE_URL = payload.base_url
-        os.environ["OPENAI_BASE_URL"] = payload.base_url
-    if payload.model_name:
-        settings.LLM_MODEL = payload.model_name
-    settings.LLM_TEMPERATURE = payload.temperature
-    settings.LLM_MAX_RETRIES = payload.max_retries
-
-    logger.info(
-        f"[Settings] LLM config updated: provider={payload.provider} "
-        f"model={payload.model_name} temperature={payload.temperature}"
-    )
-    return SettingsResponse(status="ok", message="LLM configuration applied to running process.")
+    return SettingsService().update_runtime_llm(payload)
 
 
 @router.post("/github", response_model=SettingsResponse)
 async def update_github_config(payload: GitHubConfigPayload) -> SettingsResponse:
-    """
-    Apply GitHub token to the running process.
-    This is picked up by the MCP client manager when it next spawns the
-    mcp-server-github process (${GITHUB_TOKEN} interpolation in servers.json).
-    """
-    if payload.github_token:
-        settings.GITHUB_TOKEN = payload.github_token
-        os.environ["GITHUB_TOKEN"] = payload.github_token
-        logger.info("[Settings] GitHub token updated.")
-    if payload.github_repo:
-        os.environ["GITHUB_REPO"] = payload.github_repo
-        logger.info(f"[Settings] GitHub default repo set to: {payload.github_repo}")
-    return SettingsResponse(status="ok", message="GitHub configuration applied.")
+    return SettingsService().update_runtime_github(payload)
+
+
+@router.get("/preferences", response_model=UserPreferencesResponse)
+async def get_user_preferences(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserPreferencesResponse:
+    return await SettingsService(db).get_preferences(current_user)
+
+
+@router.put("/preferences", response_model=UserPreferencesResponse)
+async def save_user_preferences(
+    payload: UserPreferencesPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserPreferencesResponse:
+    return await SettingsService(db).save_preferences(current_user, payload)
 
 
 @router.get("/", response_model=dict)
 async def get_current_settings() -> dict:
-    """Return non-sensitive current settings for the frontend to display."""
     return {
         "llm_provider": settings.LLM_PROVIDER,
         "llm_model": settings.LLM_MODEL,

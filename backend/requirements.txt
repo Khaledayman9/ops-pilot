@@ -13,6 +13,7 @@ langchain-anthropic>=0.1.13
 langchain-text-splitters
 langgraph>=0.2.0
 langchain-mcp-adapters>=0.2.0
+langchain-docling>=1.0.0
 
 # CrewAI
 crewai>=0.30.0

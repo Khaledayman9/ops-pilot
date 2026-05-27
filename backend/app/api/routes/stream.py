@@ -25,24 +25,27 @@ _orchestrator = IncidentOrchestrator()
     summary="Stream incident analysis via Server-Sent Events",
     description=(
         "Opens an SSE connection that emits agent steps in real time. "
-        "Each event has an 'event' type: step | graph | reasoning | result | error | done."
+        "Each event has an event type: step | graph | reasoning | result | error | done."
     ),
 )
 async def stream_incident(
     query: str = Query(..., description="Raw incident description"),
     session_id: str | None = Query(None, description="Existing session UUID"),
+    document_context: str | None = Query(
+        None, description="Markdown converted from uploaded documents"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
 ) -> EventSourceResponse:
-    # Apply guardrails before any processing
     try:
         safe_query = apply_guardrails(query)
+        safe_document_context = apply_guardrails(document_context or "") if document_context else ""
     except GuardrailViolation as e:
         error_detail = str(e)
 
         async def _error_gen():
             yield {
-                "event": "error",
+                "event": "error_event",
                 "data": json.dumps({"detail": error_detail, "code": "GUARDRAIL_VIOLATION"}),
             }
 
@@ -55,13 +58,23 @@ async def stream_incident(
         chat = await chat_svc.create_chat(ChatCreate(title=safe_query[:80]), user_id=user_id)
         session_id = str(chat.id)
 
-    await chat_svc.add_message(session_id, MessageCreate(role="user", content=safe_query))
+    message_content = safe_query
+    if safe_document_context:
+        message_content = (
+            f"{safe_query}\n\n=== Uploaded Document Context ===\n{safe_document_context}"
+        )
+
+    await chat_svc.add_message(session_id, MessageCreate(role="user", content=message_content))
 
     async def generator():
         yield {"event": "session", "data": json.dumps({"session_id": session_id})}
 
         result_parts: list[str] = []
-        async for event in _orchestrator.run_with_stream(safe_query, session_id):
+        async for event in _orchestrator.run_with_stream(
+            safe_query,
+            session_id,
+            document_context=safe_document_context,
+        ):
             yield {"event": event.event, "data": json.dumps(event.model_dump())}
             await chat_svc.record_execution(
                 session_id,

@@ -40,6 +40,11 @@ from app.agents.web_searcher import (
 from app.agents.crew import IncidentAnalysisCrew, WebSearchTool
 from app.agents.repo_scouter import RepoScoutAgent, RepoScoutInput, RepoScoutOutput
 from app.agents.ops_analyst import OpsAnalystAgent, OpsAnalystInput, OpsAnalystOutput, AnalysisTask
+from app.agents.document_processor import (
+    DocumentProcessorAgent,
+    DocumentProcessorInput,
+    DocumentProcessorOutput,
+)
 
 __all__ = [
     # Classifier
@@ -87,4 +92,8 @@ __all__ = [
     "OpsAnalystInput",
     "OpsAnalystOutput",
     "AnalysisTask",
+    # Document Processing
+    "DocumentProcessorAgent",
+    "DocumentProcessorInput",
+    "DocumentProcessorOutput",
 ]

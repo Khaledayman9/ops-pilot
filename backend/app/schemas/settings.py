@@ -15,6 +15,15 @@ class GitHubConfigPayload(BaseModel):
     github_repo: str = ""
 
 
+class UserPreferencesPayload(BaseModel):
+    llm: LLMConfigPayload = LLMConfigPayload()
+    github: GitHubConfigPayload = GitHubConfigPayload()
+
+
+class UserPreferencesResponse(UserPreferencesPayload):
+    user_id: str | None = None
+
+
 class SettingsResponse(BaseModel):
     status: str
     message: str

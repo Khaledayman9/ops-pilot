@@ -3,14 +3,15 @@ LangGraph-style incident orchestrator.
 
 Pipeline (9 steps):
   1. ClassifierAgent    — classify service, severity, type
-  2. EntityExtractorAgent — extract entities
-  3. RepoScoutAgent     — GitHub repo intelligence (branches, issues, PRs)
-  4. GraphAnalyzerAgent — deep Neo4j traversal
-  5. WebSearcherAgent   — DuckDuckGo web intelligence
-  6. OpsAnalystAgent    — stack-trace / error-rate / health diagnostics
-  7. IncidentAnalysisCrew — CrewAI 2-agent enrichment
-  8. RootCauseFinderAgent — structured RCA
-  9. RemediatorAgent    — ordered remediation plan
+  2. DocumentPreprocessorAgent — Preprocess input documents to Markdown format
+  3. EntityExtractorAgent — extract entities
+  4. RepoScoutAgent     — GitHub repo intelligence (branches, issues, PRs)
+  5. GraphAnalyzerAgent — deep Neo4j traversal
+  6. WebSearcherAgent   — DuckDuckGo web intelligence
+  7. OpsAnalystAgent    — stack-trace / error-rate / health diagnostics
+  8. IncidentAnalysisCrew — CrewAI 2-agent enrichment
+  9. RootCauseFinderAgent — structured RCA
+  10. RemediatorAgent    — ordered remediation plan
 """
 
 from __future__ import annotations
@@ -22,13 +23,13 @@ from logger import logger
 
 from ..classifier import ClassificationInput, ClassifierAgent
 from ..crew.incident_crew import IncidentAnalysisCrew
-from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
-from ..remediator import RemediatorAgent, RemediatorInput
-from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
 from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
-from ..web_searcher import WebSearcherAgent, WebSearchInput
+from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
+from ..ops_analyst import AnalysisTask, OpsAnalystAgent, OpsAnalystInput
+from ..remediator import RemediatorAgent, RemediatorInput
 from ..repo_scouter import RepoScoutAgent, RepoScoutInput
-from ..ops_analyst import OpsAnalystAgent, OpsAnalystInput, AnalysisTask
+from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
+from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
 
 
@@ -45,20 +46,53 @@ class IncidentOrchestrator:
         self._remediator = RemediatorAgent()
 
     async def run_with_stream(
-        self, query: str, session_id: str
+        self,
+        query: str,
+        session_id: str,
+        document_context: str = "",
     ) -> AsyncGenerator[StreamEvent, None]:
         state = IncidentState(query=query, session_id=session_id)
+        state.document_context = document_context or ""
+        state.document_context_chars = len(state.document_context)
 
-        # 1. Classify
+        effective_query = query
+        if state.document_context:
+            effective_query = (
+                f"{query}\n\n"
+                "=== Uploaded Document Context Converted By Document Processor ===\n"
+                f"{state.document_context}"
+            )
+
+        yield StreamEvent(
+            event="step",
+            agent="orchestrator",
+            step="orchestration_start",
+            status="running",
+            data={"message": "Starting orchestrator turn"},
+        )
+
+        if state.document_context:
+            state.completed_steps.append("document_processing")
+            yield StreamEvent(
+                event="step",
+                agent="document_processor",
+                step="document_processing",
+                status="complete",
+                data={
+                    "message": "Document markdown attached to this orchestration turn",
+                    "characters": state.document_context_chars,
+                },
+            )
+
         yield StreamEvent(
             event="step",
             agent="classifier",
             step="classify",
             status="running",
-            data={"message": "Classifying incident…"},
+            data={"message": "Classifying incident"},
         )
         try:
-            out = await self._classifier.run(ClassificationInput(query=query))
+            out = await self._classifier.run(ClassificationInput(query=effective_query))
             state.service = out.service
             state.severity = out.severity
             state.incident_type = out.incident_type
@@ -84,18 +118,17 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 2. Entity extraction
         yield StreamEvent(
             event="step",
             agent="entity_extractor",
             step="entity_extraction",
             status="running",
-            data={"message": "Extracting entities…"},
+            data={"message": "Extracting entities"},
         )
         try:
             out = await self._extractor.run(
                 EntityExtractorInput(
-                    query=query,
+                    query=effective_query,
                     service=state.service or "unknown",
                     incident_type=state.incident_type or "unknown",
                 )
@@ -120,18 +153,14 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 3. GitHub repo scouting
-        # Derive owner/repo from service name or entities if possible.
-        # Falls back gracefully if GITHUB_TOKEN is not set.
         yield StreamEvent(
             event="step",
             agent="repo_scout",
             step="repo_scouting",
             status="running",
-            data={"message": "Scouting GitHub repository for recent activity…"},
+            data={"message": "Scouting GitHub repository for recent activity"},
         )
         try:
-            # Best-effort: split "owner/repo" from service name or use service as repo
             service_slug = (state.service or "unknown").replace(" ", "-").lower()
             parts = service_slug.split("/", 1)
             owner = parts[0] if len(parts) == 2 else "unknown"
@@ -144,7 +173,8 @@ class IncidentOrchestrator:
                     task="summarize",
                     extra_context=(
                         f"Incident type: {state.incident_type or 'unknown'}. "
-                        f"Focus on recent commits, open PRs, and failing checks."
+                        f"Document context chars: {state.document_context_chars}. "
+                        "Focus on recent commits, open PRs, and failing checks."
                     ),
                 )
             )
@@ -156,13 +186,10 @@ class IncidentOrchestrator:
                 agent="repo_scout",
                 step="repo_scouting",
                 status="complete",
-                data={
-                    "summary": scout_out.summary[:500],
-                    "tools_used": scout_out.tools_used,
-                },
+                data={"summary": scout_out.summary[:500], "tools_used": scout_out.tools_used},
             )
         except Exception as exc:
-            logger.warning(f"[Orchestrator] RepoScout: {exc} — continuing without GitHub data")
+            logger.warning(f"[Orchestrator] RepoScout: {exc} - continuing without GitHub data")
             state.errors.append(f"repo_scout: {exc}")
             yield StreamEvent(
                 event="step",
@@ -172,13 +199,12 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 4. Deep graph traversal
         yield StreamEvent(
             event="step",
             agent="graph_analyzer",
             step="graph_traversal",
             status="running",
-            data={"message": "Deep Neo4j graph traversal…"},
+            data={"message": "Running Neo4j graph traversal"},
         )
         try:
             out = await self._graph.run(
@@ -208,15 +234,19 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 5. Web intelligence
         yield StreamEvent(
             event="step",
             agent="web_searcher",
             step="web_search",
             status="running",
-            data={"message": "Searching web for known issues…"},
+            data={"message": "Searching web for known issues"},
         )
         web_context = "No supplementary web intelligence available."
+        if state.document_context:
+            web_context = (
+                f"{web_context}\n\n=== Uploaded Document Evidence ===\n{state.document_context}"
+            )
+
         try:
             web_out = await self._web_searcher.run(
                 WebSearchInput(query=f"{state.service} {state.incident_type} incident"),
@@ -224,7 +254,7 @@ class IncidentOrchestrator:
                 incident_type=state.incident_type or "unknown",
                 deployment_version=state.deployment_version,
             )
-            web_context = web_out.combined_context
+            web_context = f"{web_out.combined_context}\n\n{web_context}"
             state.completed_steps.append("web_search")
             yield StreamEvent(
                 event="step",
@@ -244,22 +274,18 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 6. Ops diagnostics
-        # Run the OpsAnalyst over the raw incident query to parse any embedded
-        # stack traces or error counts, then fold the result into web_context
-        # so the crew and root-cause steps benefit from structured diagnostics.
         yield StreamEvent(
             event="step",
             agent="ops_analyst",
             step="ops_diagnostics",
             status="running",
-            data={"message": "Running operational diagnostics…"},
+            data={"message": "Running operational diagnostics"},
         )
         try:
             analyst_out = await self._ops_analyst.run(
                 OpsAnalystInput(
                     task=AnalysisTask.GENERAL,
-                    payload=query,
+                    payload=effective_query,
                     service_name=state.service or "unknown",
                 )
             )
@@ -273,13 +299,10 @@ class IncidentOrchestrator:
                 agent="ops_analyst",
                 step="ops_diagnostics",
                 status="complete",
-                data={
-                    "result": analyst_out.result[:500],
-                    "tools_used": analyst_out.tools_used,
-                },
+                data={"result": analyst_out.result[:500], "tools_used": analyst_out.tools_used},
             )
         except Exception as exc:
-            logger.warning(f"[Orchestrator] OpsAnalyst: {exc} — continuing without diagnostics")
+            logger.warning(f"[Orchestrator] OpsAnalyst: {exc} - continuing without diagnostics")
             state.errors.append(f"ops_analyst: {exc}")
             yield StreamEvent(
                 event="step",
@@ -289,19 +312,18 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 7. CrewAI enrichment
         yield StreamEvent(
             event="step",
             agent="crew",
             step="crew_enrichment",
             status="running",
-            data={"message": "Running CrewAI intelligence crew…"},
+            data={"message": "Running CrewAI intelligence crew"},
         )
         try:
             crew_report = await self._crew.run(
                 service=state.service or "unknown",
                 incident_type=state.incident_type or "unknown",
-                query=query,
+                query=effective_query,
                 deployment_version=state.deployment_version,
                 graph_summary=state.graph_context.get("graph_summary", ""),
             )
@@ -325,18 +347,17 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 8. Root cause analysis
         yield StreamEvent(
             event="step",
             agent="root_cause_finder",
             step="root_cause_analysis",
             status="running",
-            data={"message": "Running root cause analysis…"},
+            data={"message": "Running root cause analysis"},
         )
         try:
             out = await self._root_cause.run(
                 RootCauseFinderInput(
-                    query=query,
+                    query=effective_query,
                     service=state.service or "unknown",
                     incident_type=state.incident_type or "unknown",
                     severity=state.severity or "P2",
@@ -369,13 +390,12 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # 9. Remediation
         yield StreamEvent(
             event="step",
             agent="remediator",
             step="remediation",
             status="running",
-            data={"message": "Generating remediation plan…"},
+            data={"message": "Generating remediation plan"},
         )
         try:
             out = await self._remediator.run(
@@ -412,7 +432,6 @@ class IncidentOrchestrator:
                 data={"error": str(exc)},
             )
 
-        # Final result
         yield StreamEvent(
             event="result",
             agent="orchestrator",
@@ -423,6 +442,7 @@ class IncidentOrchestrator:
                 "service": state.service,
                 "severity": state.severity,
                 "classification": state.classification,
+                "document_context_chars": state.document_context_chars,
                 "graph_context": state.graph_context,
                 "repo_scout": {
                     "summary": state.repo_scout_summary,

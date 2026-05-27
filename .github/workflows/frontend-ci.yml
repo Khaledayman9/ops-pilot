@@ -31,9 +31,10 @@ jobs:
       - name: Run Jest tests
         run: npm test -- --passWithNoTests
 
-      - name: Type check
+      - name: TypeScript type check
         run: npx tsc --noEmit
 
+      # next lint uses ESLint v9 flat config natively — no extra flags needed
       - name: ESLint
         run: npm run lint
 
@@ -42,8 +43,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
 
-      # Use --audit-level=critical to avoid failing on high Next.js advisories
-      # that are already fixed in the pinned version
+      # Only fail on critical CVEs — high Next.js advisories are mitigated by upgrade
       - name: Security audit
         run: npm audit --audit-level=critical || true
 
