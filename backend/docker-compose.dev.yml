@@ -1,0 +1,26 @@
+services:
+  postgres:
+    ports:
+      - "5432:5432"
+
+  neo4j:
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  backend:
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery-worker:
+    volumes:
+      - ./app:/app/app
+
+  celery-beat:
+    volumes:
+      - ./app:/app/app

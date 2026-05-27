@@ -28,17 +28,17 @@ class Settings(BaseSettings):
     LOG_DIR: str = "logs"
 
     # ── Neo4j ─────────────────────────────────────────────────────────────────
-    NEO4J_URI: str = "bolt://localhost:7687"
+    NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USERNAME: str = "neo4j"
     NEO4J_PASSWORD: str = "password"
 
     # ── PostgreSQL ────────────────────────────────────────────────────────────
-    POSTGRES_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/opspilot"
+    POSTGRES_URL: str = "postgresql+asyncpg://postgres:password@postgres:5432/opspilot"
 
     # ── Redis / Celery ────────────────────────────────────────────────────────
-    REDIS_URL: str = "redis://localhost:6379/0"
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    REDIS_URL: str = "redis://redis:6379/0"
+    CELERY_BROKER_URL: str = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
 
     # ── Auth / JWT ────────────────────────────────────────────────────────────
     SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"

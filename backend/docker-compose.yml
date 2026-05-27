@@ -1,3 +1,10 @@
+x-app: &app
+  image: ops-pilot-backend:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,8 +13,6 @@ services:
       POSTGRES_DB: opspilot
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,13 +26,14 @@ services:
     restart: unless-stopped
     environment:
       NEO4J_AUTH: neo4j/password
-    ports:
-      - "7474:7474"
-      - "7687:7687"
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1",
+        ]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -35,8 +41,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -46,20 +50,10 @@ services:
       retries: 5
 
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app
     restart: unless-stopped
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-      # Shadow the .venv directory with a named volume so the Linux virtualenv
-      # created inside the container never lands on the Windows host filesystem.
-      # This fixes both the "Access is denied on lib64" alembic error and the
-      # re-download-on-every-start problem.
-      - backend_venv:/app/.venv
-    env_file: .env
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     depends_on:
       postgres:
@@ -70,15 +64,9 @@ services:
         condition: service_healthy
 
   celery-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app
     restart: unless-stopped
-    volumes:
-      - .:/app
-      - worker_venv:/app/.venv
-    env_file: .env
-    command: uv run celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     depends_on:
       redis:
         condition: service_healthy
@@ -86,15 +74,9 @@ services:
         condition: service_healthy
 
   celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    <<: *app
     restart: unless-stopped
-    volumes:
-      - .:/app
-      - beat_venv:/app/.venv
-    env_file: .env
-    command: uv run celery -A app.tasks.celery_app beat --loglevel=info
+    command: celery -A app.tasks.celery_app beat --loglevel=info
     depends_on:
       redis:
         condition: service_healthy
@@ -103,6 +85,3 @@ volumes:
   postgres_data:
   neo4j_data:
   redis_data:
-  backend_venv:
-  worker_venv:
-  beat_venv:

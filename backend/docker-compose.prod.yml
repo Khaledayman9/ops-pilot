@@ -1,0 +1,19 @@
+services:
+  backend:
+    image: ghcr.io/your-org/ops-pilot-backend:${TAG:-latest}
+    restart: always
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+
+  celery-worker:
+    image: ghcr.io/your-org/ops-pilot-backend:${TAG:-latest}
+    restart: always
+    command: celery -A app.tasks.celery_app worker --loglevel=warning --concurrency=4
+
+  celery-beat:
+    image: ghcr.io/your-org/ops-pilot-backend:${TAG:-latest}
+    restart: always
