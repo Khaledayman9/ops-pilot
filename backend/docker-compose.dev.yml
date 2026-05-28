@@ -24,3 +24,7 @@ services:
   celery-beat:
     volumes:
       - ./app:/app/app
+      - celery_beat_run:/app/run
+
+volumes:
+  celery_beat_run:

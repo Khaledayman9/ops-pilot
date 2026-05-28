@@ -28,8 +28,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 RUN .venv/bin/python -m spacy download en_core_web_sm
 
-RUN mkdir -p /app/logs \
- && chown -R appuser:appgroup /app/logs
+RUN mkdir -p /app/run /app/logs \
+ && chown -R appuser:appgroup /app/run /app/logs
 
 USER appuser
 

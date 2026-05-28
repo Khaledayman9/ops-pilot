@@ -18,26 +18,26 @@ from settings import settings
 
 _analyzer: Any | None = None
 _anonymizer: Any | None = None
-_presidio_import_failed = False
+_PRESIDIO_AVAILABLE = True
 
 
 def _get_presidio_engines() -> tuple[Any | None, Any | None]:
-    global _analyzer, _anonymizer, _presidio_import_failed
+    global _analyzer, _anonymizer, _PRESIDIO_AVAILABLE
 
     if not settings.ENABLE_PII_SCRUBBING:
+        return None, None
+
+    if not _PRESIDIO_AVAILABLE:
         return None, None
 
     if _analyzer is not None and _anonymizer is not None:
         return _analyzer, _anonymizer
 
-    if _presidio_import_failed:
-        return None, None
-
     try:
         from presidio_analyzer import AnalyzerEngine
         from presidio_anonymizer import AnonymizerEngine
     except ImportError:
-        _presidio_import_failed = True
+        _PRESIDIO_AVAILABLE = False
         logger.warning("[Guardrails] presidio not installed - using regex PII fallback")
         return None, None
 
@@ -68,10 +68,7 @@ _INJECTION_PATTERNS = [
     r"show\s+(me\s+)?(your\s+)?(instructions|prompt)",
 ]
 
-_INJECTION_RE = re.compile(
-    "|".join(_INJECTION_PATTERNS),
-    re.IGNORECASE | re.MULTILINE,
-)
+_INJECTION_RE = re.compile("|".join(_INJECTION_PATTERNS), re.IGNORECASE | re.MULTILINE)
 
 
 class GuardrailViolation(ValueError):
