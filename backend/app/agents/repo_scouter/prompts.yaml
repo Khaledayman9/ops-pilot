@@ -15,22 +15,3 @@ user_template: |
   Context    : {extra_context}
 
   Use the GitHub MCP tools to complete the task and return a clear, actionable summary.
-
-
-react_template: |
-  {system_prompt}
-
-  Available tools:
-  {tools}
-
-  Format:
-  Thought: <reasoning>
-  Action: <one of [{tool_names}]>
-  Action Input: <input>
-  Observation: <tool result>
-  ... (repeat as needed)
-  Thought: I now know the final answer
-  Final Answer: <answer>
-
-  Question: {input}
-  {agent_scratchpad}

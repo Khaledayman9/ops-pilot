@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 from langchain.agents import create_agent
-from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableConfig
 
 from app.core import BaseAgent, format_prompt
@@ -42,8 +41,9 @@ class TerraformScoutAgent(BaseAgent):
                 raise RuntimeError("Terraform MCP returned no tools")
 
             self._tool_names = [tool.name for tool in tools]
-            prompt = PromptTemplate.from_template(self._prompts["react_template"])
-            self._agent = create_agent(model=self.llm, tools=tools, system_prompt=prompt)
+            self._agent = create_agent(
+                model=self.llm, tools=tools, system_prompt=self._prompts["system"]
+            )
             self._initialized = True
 
     async def run(self, inp: TerraformScoutInput) -> TerraformScoutOutput:
@@ -64,7 +64,11 @@ class TerraformScoutAgent(BaseAgent):
         try:
             response = await asyncio.wait_for(
                 self._agent.ainvoke(
-                    {"messages": [("user", user_message), ("system", self._prompts["system"])]},
+                    {
+                        "messages": [
+                            ("user", user_message),
+                        ]
+                    },
                     config=config,
                 ),
                 timeout=60,

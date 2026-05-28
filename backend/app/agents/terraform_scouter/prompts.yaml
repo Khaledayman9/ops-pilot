@@ -3,21 +3,6 @@ system: |
   Use Terraform MCP tools to inspect workspace state, planned drift, changed modules,
   provider errors, and risky infrastructure changes related to an incident.
 
-react_template: |
-  You are investigating Terraform/IaC context for an incident.
-
-  Task: {task}
-  Workspace: {workspace}
-  Incident context:
-  {extra_context}
-
-  Return a concise incident-focused summary:
-  - Relevant Terraform resources or modules
-  - Drift or recent changes
-  - Provider or state issues
-  - Risk level
-  - Recommended operator follow-up
-
 user_template: |
   Task: {task}
   Workspace: {workspace}

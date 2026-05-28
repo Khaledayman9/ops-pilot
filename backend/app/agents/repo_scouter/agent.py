@@ -9,7 +9,6 @@ from mcp_servers.mcp_client_manager import MCPClientManager
 
 from .models import RepoScoutInput, RepoScoutOutput
 from langchain.agents import create_agent
-from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableConfig
 
 _MCP_CONFIG_PATH = Path(__file__).parent.parent.parent.parent / "mcp_servers" / "servers.json"
@@ -41,11 +40,10 @@ class RepoScoutAgent(BaseAgent):
                 self._tools = tools
                 self._tool_names = [t.name for t in tools]
 
-                prompt = PromptTemplate.from_template(self._prompts["react_template"])
                 self._agent = create_agent(
                     model=self.llm,
                     tools=tools,
-                    system_prompt=prompt,
+                    system_prompt=self._prompts["system"],
                 )
                 self._initialized = True
                 self._log(f"Initialized with {len(tools)} GitHub tools: {self._tool_names}")
@@ -92,7 +90,11 @@ class RepoScoutAgent(BaseAgent):
         try:
             response = await asyncio.wait_for(
                 self._agent.ainvoke(
-                    {"messages": [("user", user_message), ("system", self._prompts["system"])]},
+                    {
+                        "messages": [
+                            ("user", user_message),
+                        ]
+                    },
                     config=config,
                 ),
                 timeout=60,

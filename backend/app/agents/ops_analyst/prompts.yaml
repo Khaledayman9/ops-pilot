@@ -21,22 +21,3 @@ user_template: |
   {payload}
 
   Use the Ops Inspector tools to complete this task and return a clear, actionable result.
-
-
-react_template: |
-  {system_prompt}
-
-  Available tools:
-  {tools}
-
-  Format:
-  Thought: <reasoning>
-  Action: <one of [{tool_names}]>
-  Action Input: <input>
-  Observation: <tool result>
-  ... (repeat as needed)
-  Thought: I now know the final answer
-  Final Answer: <answer>
-
-  Question: {input}
-  {agent_scratchpad}
