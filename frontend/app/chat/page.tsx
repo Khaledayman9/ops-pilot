@@ -4,6 +4,7 @@ import {
   ChangeEvent,
   FormEvent,
   KeyboardEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -289,6 +290,7 @@ export default function ChatPage() {
   const [activeAgentKeys, setActiveAgentKeys] = useState<string[]>([
     "orchestrator",
   ]);
+
   const [explainabilityEvents, setExplainabilityEvents] = useState<
     ExplainabilityEvent[]
   >([]);
@@ -344,20 +346,20 @@ export default function ChatPage() {
   const hasOverflow = (node: HTMLDivElement | null) =>
     !!node && node.scrollHeight - node.clientHeight > 8;
 
-  const updateChatScrollControls = () => {
+  const updateChatScrollControls = useCallback(() => {
     setShowChatScrollControls(hasOverflow(messagesScrollRef.current));
-  };
+  }, []);
 
-  const updateExplainabilityScrollControls = () => {
+  const updateExplainabilityScrollControls = useCallback(() => {
     setShowExplainabilityScrollControls(
       hasOverflow(explainabilityScrollRef.current),
     );
-  };
+  }, []);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     updateChatScrollControls();
-  }, [messages.length, running]);
+  }, [messages.length, running, updateChatScrollControls]);
 
   useEffect(() => {
     explainabilityBottomRef.current?.scrollIntoView({
@@ -365,7 +367,7 @@ export default function ChatPage() {
       block: "end",
     });
     updateExplainabilityScrollControls();
-  }, [explainabilityEvents.length]);
+  }, [explainabilityEvents.length, updateExplainabilityScrollControls]);
 
   useEffect(() => {
     const chatNode = messagesScrollRef.current;
@@ -390,7 +392,7 @@ export default function ChatPage() {
       window.removeEventListener("resize", updateChatScrollControls);
       window.removeEventListener("resize", updateExplainabilityScrollControls);
     };
-  }, [activeId]);
+  }, [activeId, updateChatScrollControls, updateExplainabilityScrollControls]);
 
   function updateActiveSession(
     updater: (session: ChatSessionLocal) => ChatSessionLocal,
@@ -483,7 +485,7 @@ export default function ChatPage() {
     result?: unknown;
     data?: Record<string, unknown> | string | null;
   }) {
-    setExplainabilityEvents((prev) => [
+    setExplainabilityEvents((prev: ExplainabilityEvent[]) => [
       ...prev,
       {
         id: crypto.randomUUID(),
@@ -977,7 +979,7 @@ export default function ChatPage() {
                 Run an incident to see graph operations and active agent work.
               </p>
             ) : (
-              explainabilityEvents.map((event) => (
+              explainabilityEvents.map((event: ExplainabilityEvent) => (
                 <motion.div
                   key={event.id}
                   initial={{ opacity: 0, y: 8 }}
