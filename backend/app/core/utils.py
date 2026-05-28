@@ -38,10 +38,7 @@ def load_prompt(agent_name: str) -> dict[str, str]:
     with open(prompt_path, encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
 
-    return {
-        "system": data.get("system", ""),
-        "user_template": data.get("user_template", ""),
-    }
+    return {key: value or "" for key, value in data.items()}
 
 
 def format_prompt(template: str, **kwargs: object) -> str:

@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ArrowRight,
   Brain,
+  Cpu,
   FileSearch,
   GitBranch,
   HelpCircle,
@@ -215,6 +216,12 @@ const agents = [
     role: "Collects external signals such as provider incidents, CVEs, and dependency advisories.",
   },
   {
+    name: "Crew Intelligence",
+    icon: Sparkles,
+    color: "#00ccff",
+    role: "Synthesizes external intelligence and supporting evidence into a concise incident enrichment report.",
+  },
+  {
     name: "Root Cause Analyzer",
     icon: Brain,
     color: "#00ccff",
@@ -270,6 +277,12 @@ const features = [
     title: "Actionable Remediation",
     desc: "The final answer includes rollback, mitigation, escalation, and verification steps.",
     accent: "#00ff88",
+  },
+  {
+    icon: Cpu,
+    title: "Runtime LLM Settings",
+    desc: "Operators can switch providers, models, API keys, and compatible base URLs without rebuilding the backend.",
+    accent: "#7c5cff",
   },
 ];
 
@@ -791,7 +804,7 @@ export default function HomePage() {
               </div>
             </motion.div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
               {agents.map((agent, i) => (
                 <motion.div
                   key={agent.name}
@@ -838,7 +851,7 @@ export default function HomePage() {
             </h2>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {features.map((feature, i) => (
               <motion.div
                 key={feature.title}

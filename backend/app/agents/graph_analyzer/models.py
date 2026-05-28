@@ -21,11 +21,11 @@ class GraphAnalyzerQueryInput(BaseModel):
 
 
 class GraphAnalyzerQueryOutput(BaseModel):
-    affected_services: list[ServiceNode]
-    dependency_edges: list[DependencyEdge]
-    upstream_services: list[str]
-    downstream_services: list[str]
-    blast_radius_count: int
-    recent_deployments: list[dict]
-    related_incidents: list[dict]
-    graph_summary: str
+    affected_services: list[ServiceNode] = Field(default_factory=list)
+    dependency_edges: list[DependencyEdge] = Field(default_factory=list)
+    upstream_services: list[str] = Field(default_factory=list)
+    downstream_services: list[str] = Field(default_factory=list)
+    blast_radius_count: int = 0
+    recent_deployments: list[dict] = Field(default_factory=list)
+    related_incidents: list[dict] = Field(default_factory=list)
+    graph_summary: str = ""

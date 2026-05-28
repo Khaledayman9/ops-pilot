@@ -27,6 +27,7 @@ SEED_STATEMENTS = [
     "CREATE (:Team {name:'checkout-team',slack:'#checkout-squad'})",
     "CREATE (:Deployment {id:'deploy-001',version:'v2.3.1',service:'checkout-service',status:'completed',timestamp:'2024-01-15T10:30:00Z',author:'ci-bot'})",
     "CREATE (:Deployment {id:'deploy-002',version:'v1.9.0',service:'payment-service',status:'completed',timestamp:'2024-01-14T08:00:00Z',author:'ci-bot'})",
+    "CREATE (:ConfigChange {id:'cfg-001',key:'CHECKOUT_TIMEOUT_MS',old_value:'800',new_value:'250',timestamp:'2024-01-15T10:25:00Z'})",
     "CREATE (:Incident {id:'INC-001',severity:'P1',description:'Checkout latency spike post-deploy',status:'resolved',timestamp:'2024-01-15T11:00:00Z'})",
     "CREATE (:Incident {id:'INC-002',severity:'P2',description:'Redis connection pool exhaustion',status:'resolved',timestamp:'2024-01-10T14:00:00Z'})",
     "CREATE (:Runbook {id:'RB-001',title:'Checkout Service Rollback',url:'https://wiki.internal/runbooks/checkout-rollback'})",
@@ -49,6 +50,10 @@ SEED_STATEMENTS = [
     """MATCH (a:Service {name:'api-gateway'}),(t:Team {name:'platform-team'}) CREATE (a)-[:OWNED_BY]->(t)""",
     """MATCH (d:Deployment {id:'deploy-001'}),(c:Service {name:'checkout-service'}) CREATE (d)-[:DEPLOYED_IN]->(c)""",
     """MATCH (d:Deployment {id:'deploy-002'}),(p:Service {name:'payment-service'}) CREATE (d)-[:DEPLOYED_IN]->(p)""",
+    """
+    MATCH (c:ConfigChange {id:'cfg-001'}),(s:Service {name:'checkout-service'})
+    CREATE (c)-[:APPLIED_TO]->(s)
+    """,
     """MATCH (i:Incident {id:'INC-001'}),(c:Service {name:'checkout-service'}) CREATE (i)-[:AFFECTS]->(c)""",
     """MATCH (i:Incident {id:'INC-001'}),(a:Service {name:'api-gateway'}) CREATE (i)-[:AFFECTS]->(a)""",
     """MATCH (i:Incident {id:'INC-001'}),(d:Deployment {id:'deploy-001'}) CREATE (i)-[:TRIGGERED_BY]->(d)""",

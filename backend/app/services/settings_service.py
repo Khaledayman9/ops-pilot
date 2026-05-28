@@ -40,9 +40,14 @@ class SettingsService:
 
             os.environ[provider_env] = payload.api_key
 
+        settings.OPENAI_BASE_URL = payload.base_url
+
         if payload.base_url:
-            settings.OPENAI_BASE_URL = payload.base_url
             os.environ["OPENAI_BASE_URL"] = payload.base_url
+            os.environ["OPENAI_API_BASE"] = payload.base_url
+        else:
+            os.environ.pop("OPENAI_BASE_URL", None)
+            os.environ.pop("OPENAI_API_BASE", None)
 
         if payload.model_name:
             settings.LLM_MODEL = payload.model_name

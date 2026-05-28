@@ -13,7 +13,9 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Activity,
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Bot,
   Brain,
   CheckCircle2,
@@ -55,6 +57,7 @@ type Attachment = {
 };
 
 type ExplainabilityEvent = {
+  id: string;
   agent: string;
   step: string;
   status: string;
@@ -171,6 +174,13 @@ const agentTimeline = [
   },
 ];
 
+const defaultEnabledAgentKeys = agentTimeline
+  .filter(
+    (agent) =>
+      agent.required || !["repo_scout", "terraform_scout"].includes(agent.key),
+  )
+  .map((agent) => agent.key);
+
 const starterPrompts = [
   "Checkout latency is spiking after deployment v2.3.1. Error rate is 12%.",
   "Payment service is timing out and Redis CPU is above 90%.",
@@ -238,6 +248,34 @@ function stringifyResult(data: unknown): string {
   ].join("\n");
 }
 
+function isSuccessStatus(status?: string) {
+  return ["complete", "completed", "success", "done"].includes(
+    (status ?? "").toLowerCase(),
+  );
+}
+
+function isErrorStatus(status?: string) {
+  return ["error", "failed", "failure"].includes((status ?? "").toLowerCase());
+}
+
+function statusDotClass(status?: string) {
+  if (isSuccessStatus(status)) return "bg-emerald-400";
+  if (isErrorStatus(status)) return "bg-red-500";
+  return "bg-plasma";
+}
+
+function statusBorderClass(status?: string) {
+  if (isSuccessStatus(status)) return "border-emerald-500/40";
+  if (isErrorStatus(status)) return "border-red-500/40";
+  return "border-border-1";
+}
+
+function statusGlowColor(status?: string) {
+  if (isSuccessStatus(status)) return "rgba(52, 211, 153, 0.65)";
+  if (isErrorStatus(status)) return "rgba(239, 68, 68, 0.65)";
+  return "rgba(34, 211, 238, 0.55)";
+}
+
 export default function ChatPage() {
   const [sessions, setSessions] = useState<ChatSessionLocal[]>([]);
   const [activeId, setActiveId] = useState("");
@@ -246,7 +284,7 @@ export default function ChatPage() {
   const [uploading, setUploading] = useState(false);
   const [running, setRunning] = useState(false);
   const [enabledAgentKeys, setEnabledAgentKeys] = useState<string[]>(
-    agentTimeline.map((agent) => agent.key),
+    defaultEnabledAgentKeys,
   );
   const [activeAgentKeys, setActiveAgentKeys] = useState<string[]>([
     "orchestrator",
@@ -257,6 +295,18 @@ export default function ChatPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const stopStreamRef = useRef<(() => void) | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const chatTopRef = useRef<HTMLDivElement>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  const explainabilityScrollRef = useRef<HTMLDivElement>(null);
+  const explainabilityTopRef = useRef<HTMLDivElement>(null);
+  const explainabilityBottomRef = useRef<HTMLDivElement>(null);
+  const [showChatScrollControls, setShowChatScrollControls] = useState(false);
+  const [
+    showExplainabilityScrollControls,
+    setShowExplainabilityScrollControls,
+  ] = useState(false);
 
   useEffect(() => {
     const loaded = loadSessions();
@@ -278,10 +328,69 @@ export default function ChatPage() {
     sessions.find((session) => session.id === activeId) ?? sessions[0];
   const messages = activeSession?.messages ?? [];
 
+  const latestAgentStatus = useMemo(() => {
+    const statuses: Record<string, string> = {};
+    for (const event of explainabilityEvents) {
+      statuses[event.agent] = event.status;
+    }
+    return statuses;
+  }, [explainabilityEvents]);
+
   const activeAgents = useMemo(
     () => agentTimeline.filter((agent) => activeAgentKeys.includes(agent.key)),
     [activeAgentKeys],
   );
+
+  const hasOverflow = (node: HTMLDivElement | null) =>
+    !!node && node.scrollHeight - node.clientHeight > 8;
+
+  const updateChatScrollControls = () => {
+    setShowChatScrollControls(hasOverflow(messagesScrollRef.current));
+  };
+
+  const updateExplainabilityScrollControls = () => {
+    setShowExplainabilityScrollControls(
+      hasOverflow(explainabilityScrollRef.current),
+    );
+  };
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    updateChatScrollControls();
+  }, [messages.length, running]);
+
+  useEffect(() => {
+    explainabilityBottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+    updateExplainabilityScrollControls();
+  }, [explainabilityEvents.length]);
+
+  useEffect(() => {
+    const chatNode = messagesScrollRef.current;
+    const explainNode = explainabilityScrollRef.current;
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateChatScrollControls();
+      updateExplainabilityScrollControls();
+    });
+
+    if (chatNode) resizeObserver.observe(chatNode);
+    if (explainNode) resizeObserver.observe(explainNode);
+
+    window.addEventListener("resize", updateChatScrollControls);
+    window.addEventListener("resize", updateExplainabilityScrollControls);
+
+    updateChatScrollControls();
+    updateExplainabilityScrollControls();
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateChatScrollControls);
+      window.removeEventListener("resize", updateExplainabilityScrollControls);
+    };
+  }, [activeId]);
 
   function updateActiveSession(
     updater: (session: ChatSessionLocal) => ChatSessionLocal,
@@ -369,28 +478,21 @@ export default function ChatPage() {
     step?: string;
     event: string;
     status?: string;
+    detail?: unknown;
+    message?: unknown;
+    result?: unknown;
     data?: Record<string, unknown> | string | null;
   }) {
-    const data =
-      event.data && typeof event.data === "object"
-        ? (event.data as Record<string, unknown>)
-        : {};
-
     setExplainabilityEvents((prev) => [
       ...prev,
       {
+        id: crypto.randomUUID(),
         agent: event.agent ?? "system",
         step: event.step ?? event.event,
         status: event.status ?? "running",
-        detail:
-          String(
-            data.message ??
-              data.operation ??
-              data.query ??
-              data.context ??
-              data.summary ??
-              "",
-          ).slice(0, 240) || "Step updated",
+        detail: String(
+          event.detail ?? event.message ?? event.result ?? "Step updated",
+        ).slice(0, 240),
       },
     ]);
   }
@@ -444,13 +546,23 @@ export default function ChatPage() {
       documentContext,
       enabledAgentKeys,
       (event) => {
-        if (event.agent) {
+        const agentKey = event.agent as string | undefined;
+        const agentEnabled =
+          !agentKey ||
+          enabledAgentKeys.includes(agentKey) ||
+          requiredAgentKeys.has(agentKey);
+
+        if (agentKey && !agentEnabled) {
+          return;
+        }
+
+        if (agentKey) {
           setActiveAgentKeys((prev) =>
-            Array.from(new Set([...prev, event.agent as string])),
+            Array.from(new Set([...prev, agentKey])),
           );
         }
 
-        if (event.agent || event.step) {
+        if (agentKey || event.step) {
           recordExplainabilityEvent(event);
         }
 
@@ -500,7 +612,7 @@ export default function ChatPage() {
   return (
     <div className="min-h-screen bg-void grid-bg text-chrome">
       <nav className="border-b border-border-1 bg-void/80 backdrop-blur-md">
-        <div className="max-w-[1760px] mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-[1880px] mx-auto px-6 h-14 flex items-center justify-between">
           <Link
             href="/"
             className="flex items-center gap-2 text-chrome hover:text-plasma transition-colors"
@@ -514,7 +626,7 @@ export default function ChatPage() {
         </div>
       </nav>
 
-      <main className="max-w-[1760px] mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-[250px_270px_minmax(0,1fr)] 2xl:grid-cols-[250px_270px_minmax(0,1fr)_330px] gap-5">
+      <main className="max-w-[1880px] mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-[220px_240px_minmax(0,1fr)] 2xl:grid-cols-[220px_240px_minmax(0,1fr)_300px] gap-5">
         <aside className="bg-surface-1 border border-border-1 rounded-xl p-4 h-[calc(100vh-6.5rem)] overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -572,6 +684,7 @@ export default function ChatPage() {
                 const active = activeAgents.some((a) => a.key === agent.key);
                 const enabled = enabledAgentKeys.includes(agent.key);
                 const toggleDisabled = requiredAgentKeys.has(agent.key);
+                const latestStatus = latestAgentStatus[agent.key];
 
                 return (
                   <motion.div
@@ -623,11 +736,31 @@ export default function ChatPage() {
                       </button>
                     )}
 
-                    {active && (
-                      <CheckCircle2
-                        size={13}
-                        className="text-plasma shrink-0"
+                    {latestStatus ? (
+                      <motion.span
+                        key={`${agent.key}-${latestStatus}`}
+                        initial={{
+                          scale: 1,
+                          boxShadow: `0 0 0 0 ${statusGlowColor(latestStatus)}`,
+                        }}
+                        animate={{
+                          scale: [1, 1.55, 1],
+                          boxShadow: [
+                            `0 0 0 0 ${statusGlowColor(latestStatus)}`,
+                            "0 0 0 7px transparent",
+                            "0 0 0 0 transparent",
+                          ],
+                        }}
+                        transition={{ duration: 0.85, ease: "easeOut" }}
+                        className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(latestStatus)}`}
                       />
+                    ) : (
+                      active && (
+                        <CheckCircle2
+                          size={13}
+                          className="text-plasma shrink-0"
+                        />
+                      )
                     )}
                   </motion.div>
                 );
@@ -667,29 +800,68 @@ export default function ChatPage() {
             <FileText size={18} className="text-plasma" />
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {messages.map((message, index) => (
-              <motion.div
-                key={`${message.role}-${index}`}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={
-                  message.role === "user"
-                    ? "flex justify-end"
-                    : "flex justify-start"
-                }
-              >
-                <div
+          <div className="relative flex-1 min-h-0">
+            {showChatScrollControls && (
+              <div className="absolute right-4 bottom-4 z-10 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    chatTopRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    })
+                  }
+                  className="h-9 w-9 rounded-full border border-border-1 bg-surface-1/90 text-chrome hover:text-foreground"
+                  aria-label="Scroll chat to top"
+                >
+                  <ArrowUp size={16} className="mx-auto" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    chatBottomRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "end",
+                    })
+                  }
+                  className="h-9 w-9 rounded-full border border-border-1 bg-surface-1/90 text-chrome hover:text-foreground"
+                  aria-label="Scroll chat to latest"
+                >
+                  <ArrowDown size={16} className="mx-auto" />
+                </button>
+              </div>
+            )}
+
+            <div
+              ref={messagesScrollRef}
+              onScroll={updateChatScrollControls}
+              className="h-full overflow-y-auto p-5 space-y-4"
+            >
+              <div ref={chatTopRef} />
+              {messages.map((message, index) => (
+                <motion.div
+                  key={`${message.role}-${index}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
                   className={
                     message.role === "user"
-                      ? "max-w-[78%] rounded-xl bg-plasma text-void p-4 text-sm font-mono whitespace-pre-wrap"
-                      : "max-w-[86%] rounded-xl bg-surface-2 border border-border-1 text-chrome p-4 text-sm font-mono leading-relaxed whitespace-pre-wrap"
+                      ? "flex justify-end"
+                      : "flex justify-start"
                   }
                 >
-                  {message.content}
-                </div>
-              </motion.div>
-            ))}
+                  <div
+                    className={
+                      message.role === "user"
+                        ? "max-w-[82%] rounded-xl bg-plasma text-void p-4 text-sm font-mono whitespace-pre-wrap"
+                        : "max-w-[90%] rounded-xl bg-surface-2 border border-border-1 text-chrome p-4 text-sm font-mono leading-relaxed whitespace-pre-wrap"
+                    }
+                  >
+                    {message.content}
+                  </div>
+                </motion.div>
+              ))}
+              <div ref={chatBottomRef} />
+            </div>
           </div>
 
           {attachments.length > 0 && (
@@ -748,32 +920,92 @@ export default function ChatPage() {
 
         <aside className="hidden 2xl:flex bg-surface-1 border border-border-1 rounded-xl h-[calc(100vh-6.5rem)] flex-col overflow-hidden">
           <div className="border-b border-border-1 p-4">
-            <div className="flex items-center gap-2">
-              <Network size={16} className="text-plasma" />
-              <h2 className="font-display font-semibold text-sm">
-                Explainability
-              </h2>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Network size={16} className="text-plasma" />
+                  <h2 className="font-display font-semibold text-sm">
+                    Explainability
+                  </h2>
+                </div>
+                <p className="text-[11px] text-chrome-dim font-mono mt-1">
+                  Live graph queries and agent operations
+                </p>
+              </div>
+
+              {showExplainabilityScrollControls && (
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      explainabilityTopRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      })
+                    }
+                    className="h-8 w-8 rounded-md border border-border-1 text-chrome hover:text-foreground"
+                    aria-label="Scroll explainability to first step"
+                  >
+                    <ArrowUp size={15} className="mx-auto" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      explainabilityBottomRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "end",
+                      })
+                    }
+                    className="h-8 w-8 rounded-md border border-border-1 text-chrome hover:text-foreground"
+                    aria-label="Scroll explainability to latest step"
+                  >
+                    <ArrowDown size={15} className="mx-auto" />
+                  </button>
+                </div>
+              )}
             </div>
-            <p className="text-[11px] text-chrome-dim font-mono mt-1">
-              Live graph queries and agent operations
-            </p>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div
+            ref={explainabilityScrollRef}
+            onScroll={updateExplainabilityScrollControls}
+            className="flex-1 overflow-y-auto p-4 space-y-3"
+          >
+            <div ref={explainabilityTopRef} />
             {explainabilityEvents.length === 0 ? (
               <p className="text-xs text-chrome-dim font-mono">
                 Run an incident to see graph operations and active agent work.
               </p>
             ) : (
-              explainabilityEvents.map((event, index) => (
-                <div
-                  key={`${event.agent}-${event.step}-${index}`}
-                  className="border border-border-1 rounded-lg p-3 bg-surface-2"
+              explainabilityEvents.map((event) => (
+                <motion.div
+                  key={event.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`border rounded-lg p-3 bg-surface-2 ${statusBorderClass(event.status)}`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-xs text-plasma font-mono truncate">
-                      {event.agent}
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <motion.span
+                        initial={{
+                          scale: 1,
+                          boxShadow: `0 0 0 0 ${statusGlowColor(event.status)}`,
+                        }}
+                        animate={{
+                          scale: [1, 1.55, 1],
+                          boxShadow: [
+                            `0 0 0 0 ${statusGlowColor(event.status)}`,
+                            "0 0 0 7px transparent",
+                            "0 0 0 0 transparent",
+                          ],
+                        }}
+                        transition={{ duration: 0.85, ease: "easeOut" }}
+                        className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
+                      />
+                      <span className="text-xs text-plasma font-mono truncate">
+                        {event.agent}
+                      </span>
+                    </div>
                     <span className="text-[10px] text-chrome-dim font-mono">
                       {event.status}
                     </span>
@@ -784,9 +1016,10 @@ export default function ChatPage() {
                   <p className="text-[11px] text-chrome-dim font-mono leading-relaxed">
                     {event.detail}
                   </p>
-                </div>
+                </motion.div>
               ))
             )}
+            <div ref={explainabilityBottomRef} />
           </div>
         </aside>
       </main>

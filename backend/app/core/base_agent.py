@@ -80,7 +80,7 @@ class BaseAgent(abc.ABC):
             chain = self._build_chain(MyOutputSchema)
             result: MyOutputSchema = await chain.ainvoke(messages)
         """
-        return self.llm.with_structured_output(output_schema)
+        return self.llm.with_structured_output(output_schema, method="function_calling")
 
     # Logging───────────
     def _log(self, msg: str, level: str = "info") -> None:
