@@ -17,8 +17,8 @@
     }
   },
   "ops-inspector": {
-    "command": "uv",
-    "args": ["run", "python", "-m", "mcp_servers.servers.ops_inspector"],
+    "command": "python",
+    "args": ["-m", "mcp_servers.servers.ops_inspector"],
     "transport": "stdio"
   }
 }

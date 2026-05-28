@@ -20,6 +20,9 @@ revision:
 		backend alembic revision --autogenerate -m "$(m)"
 	sudo chown -R $(USER):$(USER) $(PWD)/alembic/versions
 
+seed-neo4j:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml exec backend python -m app.db.neo4j_seed
+
 prune:
 	docker system prune -a
 	docker system prune -a --volumes

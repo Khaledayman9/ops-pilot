@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 from urllib.parse import urlencode
+from settings import settings
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +42,7 @@ async def oauth_start(provider: str, redirect_uri: str) -> OAuthStartResponse:
     if provider == "google":
         query = urlencode(
             {
-                "client_id": os.getenv("GOOGLE_CLIENT_ID", ""),
+                "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
                 "redirect_uri": redirect_uri,
                 "response_type": "code",
                 "scope": "openid email profile",
@@ -55,7 +55,7 @@ async def oauth_start(provider: str, redirect_uri: str) -> OAuthStartResponse:
     if provider == "github":
         query = urlencode(
             {
-                "client_id": os.getenv("GITHUB_OAUTH_CLIENT_ID", ""),
+                "client_id": settings.GITHUB_OAUTH_CLIENT_ID,
                 "redirect_uri": redirect_uri,
                 "scope": "read:user user:email",
             }

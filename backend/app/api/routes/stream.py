@@ -17,7 +17,6 @@ from app.services.chat_service import ChatService
 from logger import logger
 
 router = APIRouter()
-_orchestrator = IncidentOrchestrator()
 
 
 @router.get(
@@ -72,7 +71,8 @@ async def stream_incident(
 
         result_parts: list[str] = []
         enabled = set(enabled_agents.split(",")) if enabled_agents else None
-        async for event in _orchestrator.run_with_stream(
+        orchestrator = IncidentOrchestrator()
+        async for event in orchestrator.run_with_stream(
             safe_query,
             session_id,
             document_context=safe_document_context,

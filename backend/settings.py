@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: str = ""
     GOOGLE_MODEL: str = "gemini-1.5-pro"
 
+    # OAuth clients
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    GITHUB_OAUTH_CLIENT_ID: str = ""
+    GITHUB_OAUTH_CLIENT_SECRET: str = ""
+
     # ── Logging ───────────────────────────────────────────────────────────────
     LOG_DIR: str = "logs"
 

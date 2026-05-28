@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import uuid
 
 import httpx
@@ -19,6 +18,7 @@ from app.core.security import (
 from app.db.models import User
 from app.schemas.auth import TokenResponse, UserCreate, UserLogin, UserPublic
 from logger import logger
+from settings import settings
 
 
 class AuthService:
@@ -124,8 +124,8 @@ class AuthService:
         return self._tokens_for_user(user)
 
     async def _google_profile(self, code: str, redirect_uri: str) -> dict[str, str]:
-        client_id = os.getenv("GOOGLE_CLIENT_ID", "")
-        client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
+        client_id = settings.GOOGLE_OAUTH_CLIENT_ID
+        client_secret = settings.GOOGLE_OAUTH_CLIENT_SECRET
         if not client_id or not client_secret:
             raise HTTPException(status_code=500, detail="Google OAuth is not configured.")
 
@@ -159,8 +159,8 @@ class AuthService:
         }
 
     async def _github_profile(self, code: str, redirect_uri: str) -> dict[str, str]:
-        client_id = os.getenv("GITHUB_OAUTH_CLIENT_ID", "")
-        client_secret = os.getenv("GITHUB_OAUTH_CLIENT_SECRET", "")
+        client_id = settings.GITHUB_OAUTH_CLIENT_ID
+        client_secret = settings.GITHUB_OAUTH_CLIENT_SECRET
         if not client_id or not client_secret:
             raise HTTPException(status_code=500, detail="GitHub OAuth is not configured.")
 

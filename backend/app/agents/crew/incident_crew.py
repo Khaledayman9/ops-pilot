@@ -138,7 +138,7 @@ class IncidentAnalysisCrew:
         )
 
         try:
-            result = crew.kickoff()
+            result = await crew.kickoff_async()
             output: str = str(result)
             logger.info(f"[IncidentAnalysisCrew] Completed, {len(output)} chars")
             return output
