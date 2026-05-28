@@ -11,24 +11,41 @@ Protections:
 from __future__ import annotations
 
 import re
+from typing import Any
 
-from settings import settings
 from logger import logger
+from settings import settings
 
-# ── Optional Presidio import ──────────────────────────────────────────────────
-try:
-    from presidio_analyzer import AnalyzerEngine
-    from presidio_anonymizer import AnonymizerEngine
+_analyzer: Any | None = None
+_anonymizer: Any | None = None
+_presidio_import_failed = False
+
+
+def _get_presidio_engines() -> tuple[Any | None, Any | None]:
+    global _analyzer, _anonymizer, _presidio_import_failed
+
+    if not settings.ENABLE_PII_SCRUBBING:
+        return None, None
+
+    if _analyzer is not None and _anonymizer is not None:
+        return _analyzer, _anonymizer
+
+    if _presidio_import_failed:
+        return None, None
+
+    try:
+        from presidio_analyzer import AnalyzerEngine
+        from presidio_anonymizer import AnonymizerEngine
+    except ImportError:
+        _presidio_import_failed = True
+        logger.warning("[Guardrails] presidio not installed - using regex PII fallback")
+        return None, None
 
     _analyzer = AnalyzerEngine()
     _anonymizer = AnonymizerEngine()
-    _PRESIDIO_AVAILABLE = True
-except ImportError:
-    _PRESIDIO_AVAILABLE = False
-    logger.warning("[Guardrails] presidio not installed — PII scrubbing disabled")
+    return _analyzer, _anonymizer
 
 
-# ── Prompt injection patterns ─────────────────────────────────────────────────
 _INJECTION_PATTERNS = [
     # Classic jailbreaks
     r"ignore\s+(all\s+)?previous\s+instructions",
@@ -62,7 +79,6 @@ class GuardrailViolation(ValueError):
 
 
 def enforce_length(text: str) -> str:
-    """Truncate input to the configured maximum length."""
     max_len = settings.MAX_QUERY_LENGTH
     if len(text) > max_len:
         logger.warning(f"[Guardrails] Input truncated from {len(text)} to {max_len} chars")
@@ -71,20 +87,15 @@ def enforce_length(text: str) -> str:
 
 
 def sanitise_input(text: str) -> str:
-    """Remove null bytes and non-printable control characters."""
     text = text.replace("\x00", "")
     text = re.sub(r"[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
     return text.strip()
 
 
 def check_prompt_injection(text: str) -> None:
-    """
-    Raise GuardrailViolation if prompt injection patterns are detected.
-
-    Only active when ENABLE_PROMPT_INJECTION_PROTECTION=true.
-    """
     if not settings.ENABLE_PROMPT_INJECTION_PROTECTION:
         return
+
     match = _INJECTION_RE.search(text)
     if match:
         logger.warning(f"[Guardrails] Prompt injection detected: '{match.group()}'")
@@ -94,56 +105,36 @@ def check_prompt_injection(text: str) -> None:
         )
 
 
-def scrub_pii(text: str) -> str:
-    """
-    Replace PII (emails, phone numbers, IP addresses, etc.) with placeholders.
-
-    Only active when ENABLE_PII_SCRUBBING=true and Presidio is installed.
-    Falls back to regex-based scrubbing if Presidio is unavailable.
-    """
-    if not settings.ENABLE_PII_SCRUBBING:
-        return text
-
-    if _PRESIDIO_AVAILABLE:
-        results = _analyzer.analyze(
-            text=text,
-            entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "IP_ADDRESS", "PERSON", "CREDIT_CARD"],
-            language="en",
-        )
-        if results:
-            anonymised = _anonymizer.anonymize(text=text, analyzer_results=results)
-            return anonymised.text
-        return text
-
-    # Regex fallback
-    # Email
+def _regex_scrub_pii(text: str) -> str:
     text = re.sub(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", "<EMAIL>", text)
-    # IPv4
     text = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "<IP_ADDRESS>", text)
-    # Phone (simple international format)
     text = re.sub(r"\+?[\d\s\-\(\)]{10,15}", "<PHONE>", text)
     return text
 
 
+def scrub_pii(text: str) -> str:
+    if not settings.ENABLE_PII_SCRUBBING:
+        return text
+
+    analyzer, anonymizer = _get_presidio_engines()
+
+    if analyzer is None or anonymizer is None:
+        return _regex_scrub_pii(text)
+
+    results = analyzer.analyze(
+        text=text,
+        entities=["EMAIL_ADDRESS", "PHONE_NUMBER", "IP_ADDRESS", "PERSON", "CREDIT_CARD"],
+        language="en",
+    )
+
+    if not results:
+        return text
+
+    anonymised = anonymizer.anonymize(text=text, analyzer_results=results)
+    return anonymised.text
+
+
 def apply_all(text: str) -> str:
-    """
-    Apply the full guardrail pipeline to user input.
-
-    Order:
-      1. Sanitise control characters
-      2. Enforce length cap
-      3. Prompt injection check
-      4. PII scrubbing
-
-    Args:
-        text: Raw user input.
-
-    Returns:
-        Cleaned text safe to pass to an LLM.
-
-    Raises:
-        GuardrailViolation: on injection detection.
-    """
     text = sanitise_input(text)
     text = enforce_length(text)
     check_prompt_injection(text)
