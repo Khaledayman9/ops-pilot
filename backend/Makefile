@@ -18,7 +18,7 @@ migrate-version-up:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm backend alembic upgrade "$(m)"
 
 migrate-version-down:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm backend alembic down "$(m)"
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm backend alembic downgrade "$(m)"
 
 revision:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm \

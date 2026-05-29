@@ -812,28 +812,30 @@ export default function HomePage() {
             </motion.div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-              {agents.map((agent, i) => (
-                <motion.div
-                  key={agent.name}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.04 }}
-                  className="bg-surface-1 border border-border-1 rounded-xl p-5 hover:border-border-2 transition-colors min-h-[220px] flex flex-col"
-                >
-                  <agent.icon
-                    size={22}
-                    className="mb-4 shrink-0"
-                    style={{ color: agent.color }}
-                  />
-                  <h3 className="font-display font-semibold text-chrome mb-2 min-h-[44px]">
-                    {agent.name}
-                  </h3>
-                  <p className="text-chrome-dim text-xs leading-relaxed font-mono">
-                    {agent.role}
-                  </p>
-                </motion.div>
-              ))}
+              {agents
+                .filter((a) => a.name !== "Orchestrator")
+                .map((agent, i) => (
+                  <motion.div
+                    key={agent.name}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.04 }}
+                    className="bg-surface-1 border border-border-1 rounded-xl p-5 hover:border-border-2 transition-colors min-h-[220px] flex flex-col"
+                  >
+                    <agent.icon
+                      size={22}
+                      className="mb-4 shrink-0"
+                      style={{ color: agent.color }}
+                    />
+                    <h3 className="font-display font-semibold text-chrome mb-2 min-h-[44px]">
+                      {agent.name}
+                    </h3>
+                    <p className="text-chrome-dim text-xs leading-relaxed font-mono">
+                      {agent.role}
+                    </p>
+                  </motion.div>
+                ))}
             </div>
           </div>
         </div>
