@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class ChatCreate(BaseModel):
     title: str | None = None
+    client_id: uuid.UUID | None = None
 
 
 class ChatResponse(BaseModel):

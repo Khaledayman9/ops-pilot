@@ -93,6 +93,12 @@ export interface ChatSession {
   created_at: string;
 }
 
+export interface WebCitation {
+  title: string;
+  url: string;
+  snippet?: string;
+}
+
 export interface StreamEvent {
   event: string;
   agent?: string;

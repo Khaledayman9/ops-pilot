@@ -11,6 +11,8 @@ from app.api.deps import get_optional_user
 from app.api.uris import StreamURIs
 from app.core.guardrails import GuardrailViolation, apply_all as apply_guardrails
 from app.db.models import User
+from app.db.models import Chat
+import uuid
 from app.db.postgres import get_db
 from app.schemas.chat import ChatCreate, MessageCreate
 from app.services.chat_service import ChatService
@@ -50,11 +52,21 @@ async def stream_incident(
             }
 
         return EventSourceResponse(_error_gen())
-
     chat_svc = ChatService(db)
     user_id = current_user.id if current_user else None
 
-    if not session_id:
+    if session_id:
+        existing = await chat_svc.get_chat(session_id, user_id=user_id)
+        if not existing:
+            new_chat = Chat(
+                id=uuid.UUID(session_id),
+                user_id=user_id,
+                title=safe_query[:80],
+            )
+            db.add(new_chat)
+            await db.commit()
+            await db.refresh(new_chat)
+    else:
         chat = await chat_svc.create_chat(ChatCreate(title=safe_query[:80]), user_id=user_id)
         session_id = str(chat.id)
 
@@ -66,10 +78,13 @@ async def stream_incident(
 
     await chat_svc.add_message(session_id, MessageCreate(role="user", content=message_content))
 
+    prior_messages = await chat_svc.get_messages(session_id)
+    history_dicts = [{"role": m.role, "content": m.content} for m in prior_messages[:-1]]
+
     async def generator():
         yield {"event": "session", "data": json.dumps({"session_id": session_id})}
 
-        result_parts: list[str] = []
+        result_data: dict = {}
         enabled = set(enabled_agents.split(",")) if enabled_agents else None
         orchestrator = IncidentOrchestrator()
         async for event in orchestrator.run_with_stream(
@@ -77,6 +92,7 @@ async def stream_incident(
             session_id,
             document_context=safe_document_context,
             enabled_agents=enabled,
+            chat_history=history_dicts,
         ):
             yield {"event": event.event, "data": json.dumps(event.model_dump())}
             await chat_svc.record_execution(
@@ -86,12 +102,21 @@ async def stream_incident(
                 json.dumps(event.data) if event.data else None,
             )
             if event.event == "result":
-                result_parts.append(json.dumps(event.data))
+                result_data = event.data if isinstance(event.data, dict) else {}
 
-        if result_parts:
+        if result_data:
+            natural = result_data.get("natural_response", "")
+            summary = result_data.get("conversation_summary", "")
+            assistant_content = json.dumps(
+                {
+                    "natural_response": natural,
+                    "conversation_summary": summary,
+                    "is_incident_relevant": result_data.get("is_incident_relevant", True),
+                }
+            )
             await chat_svc.add_message(
                 session_id,
-                MessageCreate(role="assistant", content="\n".join(result_parts)),
+                MessageCreate(role="assistant", content=assistant_content),
             )
 
         yield {"event": "done", "data": json.dumps({"session_id": session_id})}

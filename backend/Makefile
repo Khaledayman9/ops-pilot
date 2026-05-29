@@ -14,6 +14,12 @@ prod:
 migrate:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm backend alembic upgrade head
 
+migrate-version-up:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm backend alembic upgrade "$(m)"
+
+migrate-version-down:
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm backend alembic down "$(m)"
+
 revision:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm \
 		-v $(PWD)/alembic:/app/alembic \

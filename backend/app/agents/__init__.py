@@ -45,6 +45,11 @@ from app.agents.document_processor import (
     DocumentProcessorInput,
     DocumentProcessorOutput,
 )
+from app.agents.conversationalist import (
+    ConversationalistAgent,
+    ConversationalistInput,
+    ConversationalistOutput,
+)
 
 __all__ = [
     # Classifier
@@ -96,4 +101,8 @@ __all__ = [
     "DocumentProcessorAgent",
     "DocumentProcessorInput",
     "DocumentProcessorOutput",
+    # Conversationalist
+    "ConversationalistAgent",
+    "ConversationalistInput",
+    "ConversationalistOutput",
 ]

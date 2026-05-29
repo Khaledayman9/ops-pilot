@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncGenerator
 
 from app.schemas.stream import StreamEvent
 from logger import logger
 
 from ..classifier import ClassificationInput, ClassifierAgent
+from ..conversationalist import ConversationalistAgent, ConversationalistInput
+from ..conversationalist.models import ChatTurn
 from ..crew.incident_crew import IncidentAnalysisCrew
 from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
 from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
@@ -17,6 +20,8 @@ from ..terraform_scouter import TerraformScoutAgent, TerraformScoutInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
 
+
+_MAX_HISTORY_TURNS = 10
 
 DEFAULT_ENABLED_AGENTS = {
     "orchestrator",
@@ -31,6 +36,7 @@ DEFAULT_ENABLED_AGENTS = {
     "crew",
     "root_cause_finder",
     "remediator",
+    "conversationalist",
 }
 
 REQUIRED_AGENTS = {
@@ -40,7 +46,65 @@ REQUIRED_AGENTS = {
     "graph_analyzer",
     "root_cause_finder",
     "remediator",
+    "conversationalist",
 }
+
+
+def _build_analysis_context(state: IncidentState) -> str:
+    """Flatten key pipeline outputs into a single text block for the conversationalist."""
+    parts: list[str] = []
+
+    if state.service:
+        parts.append(f"Service: {state.service}")
+    if state.severity:
+        parts.append(f"Severity: {state.severity}")
+    if state.incident_type:
+        parts.append(f"Incident type: {state.incident_type}")
+    if state.root_cause:
+        parts.append(f"Root cause: {state.root_cause}")
+    if state.causal_chain:
+        chain = "; ".join(f["factor"] for f in state.causal_chain if "factor" in f)
+        parts.append(f"Causal chain: {chain}")
+    if state.remediation_steps:
+        steps = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.remediation_steps))
+        parts.append(f"Remediation steps:\n{steps}")
+    if state.rollback_steps:
+        steps = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.rollback_steps))
+        parts.append(f"Rollback steps:\n{steps}")
+    if state.timeline:
+        parts.append(f"Timeline: {'; '.join(state.timeline)}")
+    if state.repo_scout_summary:
+        parts.append(f"Repo scout: {state.repo_scout_summary[:400]}")
+    if state.terraform_scout_summary:
+        parts.append(f"Terraform scout: {state.terraform_scout_summary[:400]}")
+    if state.ops_analyst_result:
+        parts.append(f"Ops diagnostics: {state.ops_analyst_result[:400]}")
+
+    return "\n".join(parts)
+
+
+def _compact_history(raw_history: list[dict]) -> list[ChatTurn]:
+    """
+    Convert raw stored message dicts into ChatTurn objects.
+    Keeps the most recent _MAX_HISTORY_TURNS turns to stay within context limits.
+    If a message contains a compacted summary marker, prefer that over the raw content.
+    """
+    turns: list[ChatTurn] = []
+    for msg in raw_history:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+        if role == "assistant":
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, dict) and "conversation_summary" in parsed:
+                    content = parsed["conversation_summary"]
+                elif isinstance(parsed, list):
+                    content = content[:300]
+            except (json.JSONDecodeError, ValueError):
+                content = content[:300]
+        turns.append(ChatTurn(role=role, content=content))
+
+    return turns[-_MAX_HISTORY_TURNS:]
 
 
 class IncidentOrchestrator:
@@ -55,6 +119,7 @@ class IncidentOrchestrator:
         self._crew = IncidentAnalysisCrew()
         self._root_cause = RootCauseFinderAgent()
         self._remediator = RemediatorAgent()
+        self._conversationalist = ConversationalistAgent()
 
     async def run_with_stream(
         self,
@@ -62,12 +127,15 @@ class IncidentOrchestrator:
         session_id: str,
         document_context: str = "",
         enabled_agents: set[str] | None = None,
+        chat_history: list[dict] | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
         enabled_agents = (enabled_agents or DEFAULT_ENABLED_AGENTS) | REQUIRED_AGENTS
 
         state = IncidentState(query=query, session_id=session_id)
         state.document_context = document_context or ""
         state.document_context_chars = len(state.document_context)
+
+        compacted_history = _compact_history(chat_history or [])
 
         effective_query = query
         if state.document_context:
@@ -134,6 +202,74 @@ class IncidentOrchestrator:
                 status="error",
                 data={"error": str(exc)},
             )
+
+        is_incident_query = bool(
+            state.service
+            and state.service.lower() not in {"none", "unknown", "n/a", ""}
+            and state.classification.get("confidence", 1.0) > 0.25
+        )
+
+        if not is_incident_query:
+            yield StreamEvent(
+                event="step",
+                agent="conversationalist",
+                step="natural_response",
+                status="running",
+                data={"message": "Generating natural language response for off-topic query"},
+            )
+            try:
+                conv_out = await self._conversationalist.run(
+                    ConversationalistInput(
+                        query=query,
+                        history=compacted_history,
+                        incident_structured=None,
+                        web_citations=[],
+                        is_incident_query=False,
+                        analysis_context="",
+                    )
+                )
+                state.natural_response = conv_out.natural_response
+                state.is_incident_relevant = False
+                state.conversation_summary = conv_out.summary_for_history
+                state.completed_steps.append("natural_response")
+                yield StreamEvent(
+                    event="step",
+                    agent="conversationalist",
+                    step="natural_response",
+                    status="complete",
+                    data={"message": "Natural response ready"},
+                )
+            except Exception as exc:
+                logger.error(f"[Orchestrator] Conversationalist (off-topic): {exc}")
+                state.errors.append(str(exc))
+                state.natural_response = (
+                    "I'm here to help with incident analysis. "
+                    "Could you describe a production incident or system issue?"
+                )
+                state.is_incident_relevant = False
+                yield StreamEvent(
+                    event="step",
+                    agent="conversationalist",
+                    step="natural_response",
+                    status="error",
+                    data={"error": str(exc)},
+                )
+
+            yield StreamEvent(
+                event="result",
+                agent="orchestrator",
+                step="complete",
+                status="complete",
+                data={
+                    "session_id": state.session_id,
+                    "is_incident_relevant": False,
+                    "natural_response": state.natural_response,
+                    "conversation_summary": state.conversation_summary,
+                    "completed_steps": state.completed_steps,
+                    "errors": state.errors,
+                },
+            )
+            return
 
         yield StreamEvent(
             event="step",
@@ -352,13 +488,20 @@ class IncidentOrchestrator:
                     deployment_version=state.deployment_version,
                 )
                 web_context = f"{web_out.combined_context}\n\n{web_context}"
+                state.web_citations = [
+                    {"title": r.title, "url": r.url, "snippet": r.snippet} for r in web_out.results
+                ]
                 state.completed_steps.append("web_search")
                 yield StreamEvent(
                     event="step",
                     agent="web_searcher",
                     step="web_search",
                     status="complete",
-                    data={"results_count": len(web_out.results), "context": web_context[:400]},
+                    data={
+                        "results_count": len(web_out.results),
+                        "context": web_context[:400],
+                        "citations": state.web_citations,
+                    },
                 )
             except Exception as exc:
                 logger.warning(f"[Orchestrator] WebSearcher: {exc}")
@@ -556,12 +699,77 @@ class IncidentOrchestrator:
             )
 
         yield StreamEvent(
+            event="step",
+            agent="conversationalist",
+            step="natural_response",
+            status="running",
+            data={"message": "Generating natural language explanation"},
+        )
+
+        incident_structured = {
+            "service": state.service,
+            "severity": state.severity,
+            "classification": state.classification,
+            "root_cause": state.root_cause,
+            "causal_chain": state.causal_chain,
+            "timeline": state.timeline,
+            "blast_radius": {
+                "count": state.graph_context.get("blast_radius_count", 0),
+                "upstream": state.graph_context.get("upstream_services", []),
+                "downstream": state.graph_context.get("downstream_services", []),
+            },
+            "remediation_steps": state.remediation_steps,
+            "rollback_steps": state.rollback_steps,
+            "escalation_paths": state.escalation_paths,
+            "runbook_references": state.runbook_references,
+            "deployment_correlation": state.deployment_correlation,
+            "deployment_version": state.deployment_version,
+        }
+
+        try:
+            conv_out = await self._conversationalist.run(
+                ConversationalistInput(
+                    query=query,
+                    history=compacted_history,
+                    incident_structured=incident_structured,
+                    web_citations=state.web_citations,
+                    is_incident_query=True,
+                    analysis_context=_build_analysis_context(state),
+                )
+            )
+            state.natural_response = conv_out.natural_response
+            state.is_incident_relevant = conv_out.is_incident_relevant
+            state.conversation_summary = conv_out.summary_for_history
+            state.completed_steps.append("natural_response")
+            yield StreamEvent(
+                event="step",
+                agent="conversationalist",
+                step="natural_response",
+                status="complete",
+                data={"message": "Natural response generated"},
+            )
+        except Exception as exc:
+            logger.error(f"[Orchestrator] Conversationalist: {exc}")
+            state.errors.append(str(exc))
+            state.natural_response = "Analysis complete. Please review the structured output above."
+            yield StreamEvent(
+                event="step",
+                agent="conversationalist",
+                step="natural_response",
+                status="error",
+                data={"error": str(exc)},
+            )
+
+        yield StreamEvent(
             event="result",
             agent="orchestrator",
             step="complete",
             status="complete",
             data={
                 "session_id": state.session_id,
+                "is_incident_relevant": state.is_incident_relevant,
+                "natural_response": state.natural_response,
+                "conversation_summary": state.conversation_summary,
                 "service": state.service,
                 "severity": state.severity,
                 "classification": state.classification,
@@ -591,6 +799,7 @@ class IncidentOrchestrator:
                 "escalation_paths": state.escalation_paths,
                 "runbook_references": state.runbook_references,
                 "timeline": state.timeline,
+                "web_citations": state.web_citations,
                 "completed_steps": state.completed_steps,
                 "errors": state.errors,
             },

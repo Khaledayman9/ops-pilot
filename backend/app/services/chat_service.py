@@ -20,7 +20,8 @@ class ChatService:
         payload: ChatCreate,
         user_id: _uuid.UUID | None = None,
     ) -> ChatResponse:
-        chat = Chat(user_id=user_id, title=payload.title)
+        chat_id = payload.client_id or _uuid.uuid4()
+        chat = Chat(id=chat_id, user_id=user_id, title=payload.title)
         self._db.add(chat)
         await self._db.commit()
         await self._db.refresh(chat)
@@ -36,7 +37,6 @@ class ChatService:
         chat = result.scalar_one_or_none()
         if not chat:
             return None
-        # Ownership check — only if user_id provided
         if user_id and chat.user_id and chat.user_id != user_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return ChatResponse.model_validate(chat)

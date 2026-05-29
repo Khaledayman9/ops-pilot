@@ -20,6 +20,7 @@ import {
   Bot,
   Brain,
   CheckCircle2,
+  ExternalLink,
   FileSearch,
   FileText,
   GitBranch,
@@ -36,11 +37,14 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
-import { streamIncident, uploadDocuments } from "../lib/apis";
+import { streamIncident, uploadDocuments, type WebCitation } from "../lib/apis";
 
 type Message = {
   role: "user" | "assistant";
   content: string;
+  naturalResponse?: string;
+  isIncidentRelevant?: boolean;
+  citations?: WebCitation[];
 };
 
 type ChatSessionLocal = {
@@ -65,7 +69,7 @@ type ExplainabilityEvent = {
   detail: string;
 };
 
-const STORAGE_KEY = "ops_pilot_chat_sessions_v3";
+const STORAGE_KEY = "ops_pilot_chat_sessions_v4";
 
 const requiredAgentKeys = new Set([
   "orchestrator",
@@ -74,6 +78,7 @@ const requiredAgentKeys = new Set([
   "graph_analyzer",
   "root_cause_finder",
   "remediator",
+  "conversationalist",
 ]);
 
 const agentTimeline = [
@@ -173,6 +178,14 @@ const agentTimeline = [
     status: "Writes action plan",
     required: true,
   },
+  {
+    name: "Conversationalist",
+    key: "conversationalist",
+    icon: Sparkles,
+    color: "#c084fc",
+    status: "Narrates the analysis",
+    required: true,
+  },
 ];
 
 const defaultEnabledAgentKeys = agentTimeline
@@ -214,41 +227,6 @@ function loadSessions(): ChatSessionLocal[] {
   }
 }
 
-function stringifyResult(data: unknown): string {
-  if (!data || typeof data !== "object") return "Analysis complete.";
-
-  const d = data as Record<string, unknown>;
-  const remediation = Array.isArray(d.remediation_steps)
-    ? d.remediation_steps
-    : [];
-  const rollback = Array.isArray(d.rollback_steps) ? d.rollback_steps : [];
-  const completed = Array.isArray(d.completed_steps) ? d.completed_steps : [];
-
-  return [
-    "Orchestrator completed the incident turn.",
-    "",
-    `Service: ${d.service ?? "unknown"}`,
-    `Severity: ${d.severity ?? "unknown"}`,
-    `Root cause: ${d.root_cause ?? "No root cause returned"}`,
-    "",
-    "Remediation:",
-    remediation.length
-      ? remediation
-          .map((item, index) => `${index + 1}. ${String(item)}`)
-          .join("\n")
-      : "No remediation steps returned.",
-    "",
-    "Rollback:",
-    rollback.length
-      ? rollback
-          .map((item, index) => `${index + 1}. ${String(item)}`)
-          .join("\n")
-      : "No rollback steps returned.",
-    "",
-    `Completed steps: ${completed.join(", ")}`,
-  ].join("\n");
-}
-
 function isSuccessStatus(status?: string) {
   return ["complete", "completed", "success", "done"].includes(
     (status ?? "").toLowerCase(),
@@ -275,6 +253,235 @@ function statusGlowColor(status?: string) {
   if (isSuccessStatus(status)) return "rgba(52, 211, 153, 0.65)";
   if (isErrorStatus(status)) return "rgba(239, 68, 68, 0.65)";
   return "rgba(34, 211, 238, 0.55)";
+}
+
+/** Render assistant message content with optional structured + natural response */
+function AssistantMessage({ message }: { message: Message }) {
+  const hasBoth =
+    message.isIncidentRelevant !== false &&
+    message.naturalResponse &&
+    message.content &&
+    message.content !== message.naturalResponse;
+
+  return (
+    <div className="max-w-[90%] rounded-xl bg-surface-2 border border-border-1 text-chrome p-4 text-sm font-mono leading-relaxed space-y-3">
+      {/* Natural language response */}
+      {message.naturalResponse ? (
+        <div className="whitespace-pre-wrap">{message.naturalResponse}</div>
+      ) : (
+        <div className="whitespace-pre-wrap">{message.content}</div>
+      )}
+
+      {/* Structured analysis accordion — only shown when there's an incident result */}
+      {hasBoth && (
+        <details className="group border border-border-1 rounded-lg">
+          <summary className="cursor-pointer px-3 py-2 text-[11px] text-chrome-dim hover:text-plasma flex items-center gap-2 list-none">
+            <Network size={12} className="text-plasma shrink-0" />
+            <span>View structured analysis</span>
+          </summary>
+          <div className="px-3 pb-3 pt-1 text-[11px] text-chrome-dim whitespace-pre-wrap border-t border-border-1 mt-2">
+            {message.content}
+          </div>
+        </details>
+      )}
+
+      {/* Web citations */}
+      {message.citations && message.citations.length > 0 && (
+        <div className="border-t border-border-1 pt-3">
+          <p className="text-[10px] text-chrome-dim mb-2 uppercase tracking-widest">
+            Sources
+          </p>
+          <ul className="space-y-1">
+            {message.citations.map((citation) => (
+              <li key={citation.url}>
+                <a
+                  href={citation.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[11px] text-plasma hover:underline truncate max-w-full"
+                >
+                  <ExternalLink size={10} className="shrink-0" />
+                  <span className="truncate">{citation.title}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Scroll control button pair — renders only when overflow detected */
+function ScrollControls({
+  show,
+  onTop,
+  onBottom,
+  topLabel,
+  bottomLabel,
+  inline,
+}: {
+  show: boolean;
+  onTop: () => void;
+  onBottom: () => void;
+  topLabel: string;
+  bottomLabel: string;
+  inline?: boolean;
+}) {
+  if (!show) return null;
+
+  if (inline) {
+    return (
+      <div className="flex gap-1">
+        <button
+          type="button"
+          onClick={onTop}
+          className="h-8 w-8 rounded-md border border-border-1 text-chrome hover:text-foreground flex items-center justify-center"
+          aria-label={topLabel}
+        >
+          <ArrowUp size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={onBottom}
+          className="h-8 w-8 rounded-md border border-border-1 text-chrome hover:text-foreground flex items-center justify-center"
+          aria-label={bottomLabel}
+        >
+          <ArrowDown size={15} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute right-4 bottom-4 z-10 flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={onTop}
+        className="h-9 w-9 rounded-full border border-border-1 bg-surface-1/90 text-chrome hover:text-foreground flex items-center justify-center"
+        aria-label={topLabel}
+      >
+        <ArrowUp size={16} />
+      </button>
+      <button
+        type="button"
+        onClick={onBottom}
+        className="h-9 w-9 rounded-full border border-border-1 bg-surface-1/90 text-chrome hover:text-foreground flex items-center justify-center"
+        aria-label={bottomLabel}
+      >
+        <ArrowDown size={16} />
+      </button>
+    </div>
+  );
+}
+
+/** History panel with scroll controls */
+function HistoryPanel({
+  sessions,
+  activeId,
+  onSelect,
+  onCreate,
+  onDelete,
+}: {
+  sessions: ChatSessionLocal[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  onCreate: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const [showControls, setShowControls] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const node = scrollRef.current;
+    setShowControls(!!node && node.scrollHeight - node.clientHeight > 8);
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+    const obs = new ResizeObserver(checkOverflow);
+    if (scrollRef.current) obs.observe(scrollRef.current);
+    window.addEventListener("resize", checkOverflow);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener("resize", checkOverflow);
+    };
+  }, [checkOverflow, sessions.length]);
+
+  return (
+    <aside className="bg-surface-1 border border-border-1 rounded-xl p-4 h-[calc(100vh-6.5rem)] flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between mb-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <History size={16} className="text-plasma" />
+          <h2 className="font-display font-semibold text-sm">History</h2>
+        </div>
+        <div className="flex items-center gap-1">
+          <ScrollControls
+            show={showControls}
+            onTop={() =>
+              topRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }
+            onBottom={() =>
+              bottomRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "end",
+              })
+            }
+            topLabel="Scroll history to top"
+            bottomLabel="Scroll history to bottom"
+            inline
+          />
+          <button
+            onClick={onCreate}
+            className="p-1.5 rounded border border-border-1 hover:border-plasma text-chrome-dim hover:text-plasma"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        onScroll={checkOverflow}
+        className="flex-1 overflow-y-auto space-y-2"
+      >
+        <div ref={topRef} />
+        {sessions.map((session) => (
+          <button
+            key={session.id}
+            onClick={() => onSelect(session.id)}
+            className={`w-full text-left p-3 rounded border transition-colors ${
+              session.id === activeId
+                ? "border-plasma bg-plasma/10 text-plasma"
+                : "border-border-1 text-chrome-dim hover:border-border-2"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span className="truncate text-xs font-mono flex-1">
+                {session.title}
+              </span>
+              <Trash2
+                size={12}
+                onClick={(click) => {
+                  click.stopPropagation();
+                  onDelete(session.id);
+                }}
+              />
+            </div>
+            <div className="text-[10px] font-mono opacity-60 mt-1">
+              {new Date(session.createdAt).toLocaleString()}
+            </div>
+          </button>
+        ))}
+        <div ref={bottomRef} />
+      </div>
+    </aside>
+  );
 }
 
 export default function ChatPage() {
@@ -457,18 +664,34 @@ export default function ChatPage() {
     }
   }
 
-  function appendAssistant(content: string) {
+  /** Update or append the streaming assistant placeholder */
+  function appendAssistant(
+    content: string,
+    extra?: {
+      naturalResponse?: string;
+      isIncidentRelevant?: boolean;
+      citations?: WebCitation[];
+    },
+  ) {
     updateActiveSession((session) => {
       const copy = [...session.messages];
       const last = copy[copy.length - 1];
+
+      const updated: Message = {
+        role: "assistant",
+        content,
+        naturalResponse: extra?.naturalResponse,
+        isIncidentRelevant: extra?.isIncidentRelevant,
+        citations: extra?.citations,
+      };
 
       if (
         last?.role === "assistant" &&
         last.content.startsWith("Running orchestration")
       ) {
-        copy[copy.length - 1] = { role: "assistant", content };
+        copy[copy.length - 1] = updated;
       } else {
-        copy.push({ role: "assistant", content });
+        copy.push(updated);
       }
 
       return { ...session, messages: copy };
@@ -499,6 +722,40 @@ export default function ChatPage() {
     ]);
   }
 
+  function buildStructuredText(data: Record<string, unknown>): string {
+    const remediation = Array.isArray(data.remediation_steps)
+      ? data.remediation_steps
+      : [];
+    const rollback = Array.isArray(data.rollback_steps)
+      ? data.rollback_steps
+      : [];
+    const completed = Array.isArray(data.completed_steps)
+      ? data.completed_steps
+      : [];
+
+    return [
+      `Service: ${data.service ?? "unknown"}`,
+      `Severity: ${data.severity ?? "unknown"}`,
+      `Root cause: ${data.root_cause ?? "No root cause returned"}`,
+      "",
+      "Remediation:",
+      remediation.length
+        ? remediation
+            .map((item, index) => `${index + 1}. ${String(item)}`)
+            .join("\n")
+        : "No remediation steps returned.",
+      "",
+      "Rollback:",
+      rollback.length
+        ? rollback
+            .map((item, index) => `${index + 1}. ${String(item)}`)
+            .join("\n")
+        : "No rollback steps returned.",
+      "",
+      `Completed steps: ${completed.join(", ")}`,
+    ].join("\n");
+  }
+
   function submitIncident(event?: FormEvent<HTMLFormElement>, prompt?: string) {
     event?.preventDefault();
 
@@ -514,9 +771,12 @@ export default function ChatPage() {
     const title =
       text.slice(0, 48) || attachments[0]?.filename || "Document analysis";
 
+    const sessionUUID = activeSession.backendSessionId ?? activeSession.id;
+
     updateActiveSession((session) => ({
       ...session,
       title: session.title === "New incident" ? title : session.title,
+      backendSessionId: session.backendSessionId ?? session.id,
       messages: [
         ...session.messages,
         {
@@ -544,7 +804,7 @@ export default function ChatPage() {
     stopStreamRef.current?.();
     stopStreamRef.current = streamIncident(
       text || "Analyze uploaded document context.",
-      activeSession.backendSessionId,
+      sessionUUID,
       documentContext,
       enabledAgentKeys,
       (event) => {
@@ -582,8 +842,33 @@ export default function ChatPage() {
           }
         }
 
-        if (event.event === "result") {
-          appendAssistant(stringifyResult(event.data));
+        if (
+          event.event === "result" &&
+          event.data &&
+          typeof event.data === "object"
+        ) {
+          const data = event.data as Record<string, unknown>;
+          const isIncidentRelevant = data.is_incident_relevant !== false;
+          const naturalResponse =
+            typeof data.natural_response === "string"
+              ? data.natural_response
+              : undefined;
+          const citations = Array.isArray(data.web_citations)
+            ? (data.web_citations as WebCitation[])
+            : [];
+
+          const structuredText = isIncidentRelevant
+            ? buildStructuredText(data)
+            : "";
+
+          appendAssistant(
+            structuredText || (naturalResponse ?? "Analysis complete."),
+            {
+              naturalResponse,
+              isIncidentRelevant,
+              citations: citations.length ? citations : undefined,
+            },
+          );
         }
       },
       (sessionId) => {
@@ -629,51 +914,16 @@ export default function ChatPage() {
       </nav>
 
       <main className="max-w-[1880px] mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-[220px_240px_minmax(0,1fr)] 2xl:grid-cols-[220px_240px_minmax(0,1fr)_300px] gap-5">
-        <aside className="bg-surface-1 border border-border-1 rounded-xl p-4 h-[calc(100vh-6.5rem)] overflow-y-auto">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <History size={16} className="text-plasma" />
-              <h2 className="font-display font-semibold text-sm">History</h2>
-            </div>
-            <button
-              onClick={createNewChat}
-              className="p-1.5 rounded border border-border-1 hover:border-plasma text-chrome-dim hover:text-plasma"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
+        {/* ── History sidebar with scroll controls ── */}
+        <HistoryPanel
+          sessions={sessions}
+          activeId={activeId}
+          onSelect={setActiveId}
+          onCreate={createNewChat}
+          onDelete={deleteSession}
+        />
 
-          <div className="space-y-2">
-            {sessions.map((session) => (
-              <button
-                key={session.id}
-                onClick={() => setActiveId(session.id)}
-                className={`w-full text-left p-3 rounded border transition-colors ${
-                  session.id === activeId
-                    ? "border-plasma bg-plasma/10 text-plasma"
-                    : "border-border-1 text-chrome-dim hover:border-border-2"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-xs font-mono flex-1">
-                    {session.title}
-                  </span>
-                  <Trash2
-                    size={12}
-                    onClick={(click) => {
-                      click.stopPropagation();
-                      deleteSession(session.id);
-                    }}
-                  />
-                </div>
-                <div className="text-[10px] font-mono opacity-60 mt-1">
-                  {new Date(session.createdAt).toLocaleString()}
-                </div>
-              </button>
-            ))}
-          </div>
-        </aside>
-
+        {/* ── Agents + Starters ── */}
         <aside className="space-y-4 h-[calc(100vh-6.5rem)] overflow-y-auto">
           <section className="bg-surface-1 border border-border-1 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-4">
@@ -789,6 +1039,7 @@ export default function ChatPage() {
           </section>
         </aside>
 
+        {/* ── Chat panel ── */}
         <section className="bg-surface-1 border border-border-1 rounded-xl h-[calc(100vh-6.5rem)] flex flex-col overflow-hidden">
           <div className="border-b border-border-1 p-5 flex items-center justify-between">
             <div>
@@ -803,36 +1054,23 @@ export default function ChatPage() {
           </div>
 
           <div className="relative flex-1 min-h-0">
-            {showChatScrollControls && (
-              <div className="absolute right-4 bottom-4 z-10 flex flex-col gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    chatTopRef.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "start",
-                    })
-                  }
-                  className="h-9 w-9 rounded-full border border-border-1 bg-surface-1/90 text-chrome hover:text-foreground"
-                  aria-label="Scroll chat to top"
-                >
-                  <ArrowUp size={16} className="mx-auto" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    chatBottomRef.current?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "end",
-                    })
-                  }
-                  className="h-9 w-9 rounded-full border border-border-1 bg-surface-1/90 text-chrome hover:text-foreground"
-                  aria-label="Scroll chat to latest"
-                >
-                  <ArrowDown size={16} className="mx-auto" />
-                </button>
-              </div>
-            )}
+            <ScrollControls
+              show={showChatScrollControls}
+              onTop={() =>
+                chatTopRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+              }
+              onBottom={() =>
+                chatBottomRef.current?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "end",
+                })
+              }
+              topLabel="Scroll chat to top"
+              bottomLabel="Scroll chat to latest"
+            />
 
             <div
               ref={messagesScrollRef}
@@ -851,15 +1089,13 @@ export default function ChatPage() {
                       : "flex justify-start"
                   }
                 >
-                  <div
-                    className={
-                      message.role === "user"
-                        ? "max-w-[82%] rounded-xl bg-plasma text-void p-4 text-sm font-mono whitespace-pre-wrap"
-                        : "max-w-[90%] rounded-xl bg-surface-2 border border-border-1 text-chrome p-4 text-sm font-mono leading-relaxed whitespace-pre-wrap"
-                    }
-                  >
-                    {message.content}
-                  </div>
+                  {message.role === "user" ? (
+                    <div className="max-w-[82%] rounded-xl bg-plasma text-void p-4 text-sm font-mono whitespace-pre-wrap">
+                      {message.content}
+                    </div>
+                  ) : (
+                    <AssistantMessage message={message} />
+                  )}
                 </motion.div>
               ))}
               <div ref={chatBottomRef} />
@@ -920,6 +1156,7 @@ export default function ChatPage() {
           </form>
         </section>
 
+        {/* ── Explainability panel ── */}
         <aside className="hidden 2xl:flex bg-surface-1 border border-border-1 rounded-xl h-[calc(100vh-6.5rem)] flex-col overflow-hidden">
           <div className="border-b border-border-1 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -935,36 +1172,24 @@ export default function ChatPage() {
                 </p>
               </div>
 
-              {showExplainabilityScrollControls && (
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      explainabilityTopRef.current?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "start",
-                      })
-                    }
-                    className="h-8 w-8 rounded-md border border-border-1 text-chrome hover:text-foreground"
-                    aria-label="Scroll explainability to first step"
-                  >
-                    <ArrowUp size={15} className="mx-auto" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      explainabilityBottomRef.current?.scrollIntoView({
-                        behavior: "smooth",
-                        block: "end",
-                      })
-                    }
-                    className="h-8 w-8 rounded-md border border-border-1 text-chrome hover:text-foreground"
-                    aria-label="Scroll explainability to latest step"
-                  >
-                    <ArrowDown size={15} className="mx-auto" />
-                  </button>
-                </div>
-              )}
+              <ScrollControls
+                show={showExplainabilityScrollControls}
+                onTop={() =>
+                  explainabilityTopRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  })
+                }
+                onBottom={() =>
+                  explainabilityBottomRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "end",
+                  })
+                }
+                topLabel="Scroll explainability to first step"
+                bottomLabel="Scroll explainability to latest step"
+                inline
+              />
             </div>
           </div>
 
