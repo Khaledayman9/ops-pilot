@@ -140,7 +140,7 @@ const simLines = [
 const stats = [
   {
     label: "Agents Coordinated",
-    value: "11",
+    value: "12",
     sub: "orchestrator plus specialists",
   },
   {
@@ -166,6 +166,12 @@ const agents = [
     icon: Workflow,
     color: "#00ccff",
     role: "Owns the run, chooses the next agent, merges evidence, and stops loops when confidence is high enough.",
+  },
+  {
+    name: "Conversationalist",
+    icon: Sparkles,
+    color: "#c084fc",
+    role: "Produces the natural-language reply for every turn — synthesising structured pipeline output into an empathetic, actionable explanation for non-incident queries too.",
   },
   {
     name: "Classifier",
@@ -291,7 +297,7 @@ const orchestrationSteps = [
   "Classifier and Entity Extractor normalize the request",
   "Document Processor adds uploaded evidence when files exist",
   "Repo Scanner, Terraform Scanner, Graph Analyzer, Ops Analyst, and Web Intelligence collect evidence",
-  "Root Cause Analyzer weighs evidence and Remediator produces the operator-ready response",
+  "Root Cause Analyzer weighs evidence, Remediator produces the action plan, and Conversationalist narrates the final operator-ready response",
 ];
 
 const particlePositions = [
@@ -648,10 +654,11 @@ export default function HomePage() {
               transition={{ delay: 0.3 }}
               className="text-chrome-dim text-sm leading-relaxed mb-10 max-w-lg font-mono"
             >
-              Ops-Pilot uses an orchestrator plus ten specialist agents to
+              Ops-Pilot uses an orchestrator plus eleven specialist agents to
               classify incidents, process documents, scan repositories, inspect
               Terraform context, read telemetry, traverse the service graph,
-              explain root cause, and produce remediation steps.
+              explain root cause, produce remediation steps, and narrate the
+              final response conversationally.
             </motion.p>
 
             <motion.div
