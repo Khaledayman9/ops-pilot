@@ -11,7 +11,8 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 import {
   Activity,
   ArrowDown,
@@ -35,6 +36,7 @@ import {
   Trash2,
   Wrench,
   Workflow,
+  X,
   Zap,
 } from "lucide-react";
 import { streamIncident, uploadDocuments, type WebCitation } from "../lib/apis";
@@ -255,7 +257,13 @@ function statusGlowColor(status?: string) {
   return "rgba(34, 211, 238, 0.55)";
 }
 
-/** Render assistant message content with optional structured + natural response */
+function statusLabel(status?: string) {
+  if (isSuccessStatus(status)) return "Completed";
+  if (isErrorStatus(status)) return "Error";
+  return "Running";
+}
+
+/** Render assistant message content with proper markdown */
 function AssistantMessage({ message }: { message: Message }) {
   const hasBoth =
     message.isIncidentRelevant !== false &&
@@ -263,14 +271,95 @@ function AssistantMessage({ message }: { message: Message }) {
     message.content &&
     message.content !== message.naturalResponse;
 
+  const textToRender = message.naturalResponse ?? message.content;
+
   return (
     <div className="max-w-[90%] rounded-xl bg-surface-2 border border-border-1 text-chrome p-4 text-sm font-mono leading-relaxed space-y-3">
-      {/* Natural language response */}
-      {message.naturalResponse ? (
-        <div className="whitespace-pre-wrap">{message.naturalResponse}</div>
-      ) : (
-        <div className="whitespace-pre-wrap">{message.content}</div>
-      )}
+      {/* Markdown-rendered natural language response */}
+      <div className="prose-ops">
+        <ReactMarkdown
+          components={{
+            h1: ({ children }) => (
+              <h1 className="text-base font-bold text-chrome mb-2 mt-3 first:mt-0">
+                {children}
+              </h1>
+            ),
+            h2: ({ children }) => (
+              <h2 className="text-sm font-bold text-chrome mb-1.5 mt-3 first:mt-0">
+                {children}
+              </h2>
+            ),
+            h3: ({ children }) => (
+              <h3 className="text-sm font-semibold text-chrome mb-1 mt-2 first:mt-0">
+                {children}
+              </h3>
+            ),
+            p: ({ children }) => (
+              <p className="mb-2 last:mb-0 text-chrome leading-relaxed">
+                {children}
+              </p>
+            ),
+            strong: ({ children }) => (
+              <strong className="font-bold text-chrome">{children}</strong>
+            ),
+            em: ({ children }) => (
+              <em className="italic text-chrome-dim">{children}</em>
+            ),
+            ul: ({ children }) => (
+              <ul className="list-disc list-inside space-y-1 mb-2 text-chrome">
+                {children}
+              </ul>
+            ),
+            ol: ({ children }) => (
+              <ol className="list-decimal list-inside space-y-1 mb-2 text-chrome">
+                {children}
+              </ol>
+            ),
+            li: ({ children }) => (
+              <li className="text-chrome leading-relaxed">{children}</li>
+            ),
+            code: ({ children, className }) => {
+              const isBlock = className?.includes("language-");
+              if (isBlock) {
+                return (
+                  <code className="block bg-surface-1 border border-border-1 rounded p-3 text-xs text-plasma whitespace-pre-wrap mb-2">
+                    {children}
+                  </code>
+                );
+              }
+              return (
+                <code className="bg-surface-1 border border-border-1 rounded px-1 py-0.5 text-xs text-plasma">
+                  {children}
+                </code>
+              );
+            },
+            pre: ({ children }) => (
+              <pre className="bg-surface-1 border border-border-1 rounded p-3 overflow-x-auto mb-2 text-xs text-plasma">
+                {children}
+              </pre>
+            ),
+            blockquote: ({ children }) => (
+              <blockquote className="border-l-2 border-plasma pl-3 text-chrome-dim italic mb-2">
+                {children}
+              </blockquote>
+            ),
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-plasma hover:underline inline-flex items-center gap-1"
+              >
+                {children}
+                <ExternalLink size={10} className="inline shrink-0" />
+              </a>
+            ),
+            hr: () => <hr className="border-border-1 my-3" />,
+          }}
+        >
+          {textToRender}
+        </ReactMarkdown>
+      </div>
 
       {/* Structured analysis accordion — only shown when there's an incident result */}
       {hasBoth && (
@@ -312,7 +401,7 @@ function AssistantMessage({ message }: { message: Message }) {
   );
 }
 
-/** Scroll control button pair — renders only when overflow detected */
+/** Scroll control button pair */
 function ScrollControls({
   show,
   onTop,
@@ -375,7 +464,7 @@ function ScrollControls({
   );
 }
 
-/** History panel with scroll controls */
+/** History panel */
 function HistoryPanel({
   sessions,
   activeId,
@@ -484,6 +573,244 @@ function HistoryPanel({
   );
 }
 
+/** Full-screen modal for a single explainability event */
+function ExplainabilityModal({
+  event,
+  onClose,
+}: {
+  event: ExplainabilityEvent;
+  onClose: () => void;
+}) {
+  const agentInfo = agentTimeline.find((a) => a.key === event.agent);
+
+  // Close on Escape
+  useEffect(() => {
+    const handler = (e: globalThis.KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="overlay"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm"
+        onClick={onClose}
+      >
+        <motion.div
+          key="modal"
+          initial={{ opacity: 0, scale: 0.88, y: 24 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.92, y: 12 }}
+          transition={{ type: "spring", stiffness: 320, damping: 26 }}
+          className="relative bg-surface-1 border border-border-2 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close button */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 right-4 h-8 w-8 rounded-md border border-border-1 text-chrome-dim hover:text-plasma hover:border-plasma flex items-center justify-center transition-colors"
+            aria-label="Close"
+          >
+            <X size={14} />
+          </button>
+
+          {/* Agent header */}
+          <div className="flex items-center gap-3 mb-5">
+            <div
+              className="w-10 h-10 rounded-lg border border-border-2 bg-surface-2 flex items-center justify-center"
+              style={{
+                boxShadow: `0 0 12px 0 ${statusGlowColor(event.status)}`,
+              }}
+            >
+              {agentInfo ? (
+                <agentInfo.icon size={18} style={{ color: agentInfo.color }} />
+              ) : (
+                <Network size={18} className="text-plasma" />
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-mono text-chrome-dim uppercase tracking-widest">
+                {event.agent}
+              </p>
+              <p className="text-sm font-bold text-chrome mt-0.5">
+                {event.step}
+              </p>
+            </div>
+          </div>
+
+          {/* Status badge */}
+          <div className="flex items-center gap-2 mb-4">
+            <motion.span
+              initial={{ scale: 1 }}
+              animate={{
+                scale: [1, 1.4, 1],
+                boxShadow: [
+                  `0 0 0 0 ${statusGlowColor(event.status)}`,
+                  "0 0 0 6px transparent",
+                  "0 0 0 0 transparent",
+                ],
+              }}
+              transition={{ duration: 1.2, repeat: 2 }}
+              className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
+            />
+            <span className="text-xs font-mono text-chrome-dim">
+              Status:{" "}
+              <span
+                className={
+                  isSuccessStatus(event.status)
+                    ? "text-emerald-400"
+                    : isErrorStatus(event.status)
+                      ? "text-red-400"
+                      : "text-plasma"
+                }
+              >
+                {statusLabel(event.status)}
+              </span>
+            </span>
+          </div>
+
+          {/* Detail body */}
+          <div className="bg-surface-2 border border-border-1 rounded-lg p-4">
+            <p className="text-[11px] text-chrome-dim font-mono uppercase tracking-widest mb-2">
+              Operation Detail
+            </p>
+            <p className="text-sm text-chrome font-mono leading-relaxed whitespace-pre-wrap">
+              {event.detail || "No detail available for this operation."}
+            </p>
+          </div>
+
+          {/* Agent description if available */}
+          {agentInfo && (
+            <p className="text-[11px] text-chrome-dim font-mono mt-4">
+              {agentInfo.name} — {agentInfo.status}
+            </p>
+          )}
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+/** Single explainability event card — with hover tooltip and click-to-open */
+function ExplainabilityCard({
+  event,
+  onOpen,
+}: {
+  event: ExplainabilityEvent;
+  onOpen: (event: ExplainabilityEvent) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const agentInfo = agentTimeline.find((a) => a.key === event.agent);
+
+  return (
+    <div className="relative">
+      <motion.div
+        key={event.id}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`border rounded-lg p-3 bg-surface-2 ${statusBorderClass(event.status)} cursor-pointer hover:border-plasma/60 transition-colors group`}
+        onClick={() => onOpen(event)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => e.key === "Enter" && onOpen(event)}
+        aria-label={`Open details for ${event.agent} — ${event.step}`}
+      >
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <motion.span
+              initial={{
+                scale: 1,
+                boxShadow: `0 0 0 0 ${statusGlowColor(event.status)}`,
+              }}
+              animate={{
+                scale: [1, 1.55, 1],
+                boxShadow: [
+                  `0 0 0 0 ${statusGlowColor(event.status)}`,
+                  "0 0 0 7px transparent",
+                  "0 0 0 0 transparent",
+                ],
+              }}
+              transition={{ duration: 0.85, ease: "easeOut" }}
+              className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
+            />
+            <span className="text-xs text-plasma font-mono truncate">
+              {event.agent}
+            </span>
+          </div>
+          <span className="text-[10px] text-chrome-dim font-mono">
+            {event.status}
+          </span>
+        </div>
+        <div className="text-xs text-chrome font-mono mb-1">{event.step}</div>
+        <p className="text-[11px] text-chrome-dim font-mono leading-relaxed line-clamp-2">
+          {event.detail}
+        </p>
+        {/* Click hint */}
+        <p className="text-[10px] text-chrome-dim/50 font-mono mt-1.5 group-hover:text-plasma/70 transition-colors">
+          Click to expand ↗
+        </p>
+      </motion.div>
+
+      {/* Hover tooltip */}
+      <AnimatePresence>
+        {hovered && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.95 }}
+            animate={{ opacity: 1, y: -8, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.95 }}
+            transition={{ duration: 0.12 }}
+            className="absolute bottom-full left-0 right-0 z-20 mb-1 pointer-events-none"
+          >
+            <div className="bg-void border border-border-2 rounded-lg p-3 shadow-xl">
+              <div className="flex items-center gap-2 mb-1">
+                {agentInfo ? (
+                  <agentInfo.icon
+                    size={12}
+                    style={{ color: agentInfo.color }}
+                  />
+                ) : (
+                  <Network size={12} className="text-plasma" />
+                )}
+                <span className="text-[11px] font-mono text-chrome font-bold">
+                  {agentInfo?.name ?? event.agent}
+                </span>
+              </div>
+              <p className="text-[10px] font-mono text-chrome-dim leading-relaxed">
+                {event.detail.length > 120
+                  ? event.detail.slice(0, 120) + "…"
+                  : event.detail}
+              </p>
+              <p className="text-[10px] font-mono mt-1.5">
+                <span
+                  className={
+                    isSuccessStatus(event.status)
+                      ? "text-emerald-400"
+                      : isErrorStatus(event.status)
+                        ? "text-red-400"
+                        : "text-plasma"
+                  }
+                >
+                  {statusLabel(event.status)}
+                </span>
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const [sessions, setSessions] = useState<ChatSessionLocal[]>([]);
   const [activeId, setActiveId] = useState("");
@@ -501,6 +828,9 @@ export default function ChatPage() {
   const [explainabilityEvents, setExplainabilityEvents] = useState<
     ExplainabilityEvent[]
   >([]);
+
+  const [selectedEvent, setSelectedEvent] =
+    useState<ExplainabilityEvent | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const stopStreamRef = useRef<(() => void) | null>(null);
@@ -664,7 +994,6 @@ export default function ChatPage() {
     }
   }
 
-  /** Update or append the streaming assistant placeholder */
   function appendAssistant(
     content: string,
     extra?: {
@@ -898,6 +1227,14 @@ export default function ChatPage() {
 
   return (
     <div className="min-h-screen bg-void grid-bg text-chrome">
+      {/* Explainability detail modal */}
+      {selectedEvent && (
+        <ExplainabilityModal
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      )}
+
       <nav className="border-b border-border-1 bg-void/80 backdrop-blur-md">
         <div className="max-w-[1880px] mx-auto px-6 h-14 flex items-center justify-between">
           <Link
@@ -914,7 +1251,7 @@ export default function ChatPage() {
       </nav>
 
       <main className="max-w-[1880px] mx-auto px-6 py-6 grid grid-cols-1 xl:grid-cols-[220px_240px_minmax(0,1fr)] 2xl:grid-cols-[220px_240px_minmax(0,1fr)_300px] gap-5">
-        {/* ── History sidebar with scroll controls ── */}
+        {/* History sidebar */}
         <HistoryPanel
           sessions={sessions}
           activeId={activeId}
@@ -923,7 +1260,7 @@ export default function ChatPage() {
           onDelete={deleteSession}
         />
 
-        {/* ── Agents + Starters ── */}
+        {/* Agents + Starters */}
         <aside className="space-y-4 h-[calc(100vh-6.5rem)] overflow-y-auto">
           <section className="bg-surface-1 border border-border-1 rounded-xl p-4">
             <div className="flex items-center gap-2 mb-4">
@@ -1039,7 +1376,7 @@ export default function ChatPage() {
           </section>
         </aside>
 
-        {/* ── Chat panel ── */}
+        {/* Chat panel */}
         <section className="bg-surface-1 border border-border-1 rounded-xl h-[calc(100vh-6.5rem)] flex flex-col overflow-hidden">
           <div className="border-b border-border-1 p-5 flex items-center justify-between">
             <div>
@@ -1156,7 +1493,7 @@ export default function ChatPage() {
           </form>
         </section>
 
-        {/* ── Explainability panel ── */}
+        {/* Explainability panel */}
         <aside className="hidden 2xl:flex bg-surface-1 border border-border-1 rounded-xl h-[calc(100vh-6.5rem)] flex-col overflow-hidden">
           <div className="border-b border-border-1 p-4">
             <div className="flex items-start justify-between gap-3">
@@ -1168,7 +1505,7 @@ export default function ChatPage() {
                   </h2>
                 </div>
                 <p className="text-[11px] text-chrome-dim font-mono mt-1">
-                  Live graph queries and agent operations
+                  Hover for preview · Click to expand
                 </p>
               </div>
 
@@ -1205,45 +1542,11 @@ export default function ChatPage() {
               </p>
             ) : (
               explainabilityEvents.map((event: ExplainabilityEvent) => (
-                <motion.div
+                <ExplainabilityCard
                   key={event.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`border rounded-lg p-3 bg-surface-2 ${statusBorderClass(event.status)}`}
-                >
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <motion.span
-                        initial={{
-                          scale: 1,
-                          boxShadow: `0 0 0 0 ${statusGlowColor(event.status)}`,
-                        }}
-                        animate={{
-                          scale: [1, 1.55, 1],
-                          boxShadow: [
-                            `0 0 0 0 ${statusGlowColor(event.status)}`,
-                            "0 0 0 7px transparent",
-                            "0 0 0 0 transparent",
-                          ],
-                        }}
-                        transition={{ duration: 0.85, ease: "easeOut" }}
-                        className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
-                      />
-                      <span className="text-xs text-plasma font-mono truncate">
-                        {event.agent}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-chrome-dim font-mono">
-                      {event.status}
-                    </span>
-                  </div>
-                  <div className="text-xs text-chrome font-mono mb-1">
-                    {event.step}
-                  </div>
-                  <p className="text-[11px] text-chrome-dim font-mono leading-relaxed">
-                    {event.detail}
-                  </p>
-                </motion.div>
+                  event={event}
+                  onOpen={setSelectedEvent}
+                />
               ))
             )}
             <div ref={explainabilityBottomRef} />
