@@ -1063,8 +1063,10 @@ export default function ChatPage() {
     sessions.find((session) => session.id === activeId) ?? sessions[0];
   const messages = activeSession?.messages ?? [];
 
-  const explainabilityEvents: ExplainabilityEvent[] =
-    activeSession?.explainabilityEvents ?? [];
+  const explainabilityEvents = useMemo<ExplainabilityEvent[]>(
+    () => activeSession?.explainabilityEvents ?? [],
+    [activeSession],
+  );
 
   const latestAgentStatus = useMemo(() => {
     const statuses: Record<string, string> = {};
