@@ -204,65 +204,146 @@ backend/
 
 ## Agent Pipeline — Deep Dive
 
-### Classifier
-
-Input: raw incident query string.
-Output: `ClassificationOutput` — service name, severity (P0–P3), incident_type (latency / error_rate / outage / memory / cpu / disk / network / unknown), affected_components list, trigger_event, confidence score (0.0–1.0).
-
-If confidence is below 0.25 or service resolves to "none"/"unknown", the orchestrator routes directly to the Conversationalist for a general chat response, bypassing the full incident pipeline.
-
-### Entity Extractor
-
-Input: query + service name + incident type.
-Output: `EntityExtractorOutput` — structured `EntityExtraction` (services, deployments, metrics, error_codes, time_range, keywords) + `search_queries` list (Cypher-ready) + `context_summary`.
-
-The `search_queries` are used directly by the Graph Analyzer for targeted Cypher lookups.
+The pipeline is an async generator (`IncidentOrchestrator.run_with_stream`) that executes agents in sequence, yielding `StreamEvent` objects consumed by the SSE endpoint. Agents share mutable `IncidentState`. Non-fatal agent failures are logged and the pipeline continues; fatal failures (classifier, graph_analyzer) may degrade output quality but never crash the stream.
 
 ### Document Processor
 
-Converts uploaded files using `markitdown` and `pypandoc`. Supported formats: PDF, DOCX, PPTX, XLS/XLSX, HTML, Markdown, CSV, TXT. The resulting Markdown is injected into `IncidentState.document_context` and prepended to the effective query sent to all downstream agents.
+**Enabled:** Only when `document_processor` is in `enabled_agents` (the SSE endpoint adds it automatically when `document_context` is non-empty — i.e. the user uploaded a file).
+
+**Input:** Uploaded file path, filename, optional MIME type.
+**Output:** `DocumentProcessorOutput` — markdown string, character count, chunk count.
+
+Uses `markitdown` for conversion. Supports PDF, DOCX, PPTX, XLS/XLSX, HTML, Markdown, CSV, TXT. The resulting Markdown is injected into `IncidentState.document_context` by the SSE layer before the orchestrator starts. The Document Processor step in the pipeline emits `running` then `complete` (or `error`) events so the frontend can display it in the explainability sidebar.
+
+If `document_processor` is not in `enabled_agents`, the step emits `skipped` and the pipeline proceeds without document context.
+
+### Classifier
+
+**Input:** Raw incident query string (with document context prepended if present).
+**Output:** `ClassificationOutput` — service name, severity (P0–P3), incident_type (latency / error_rate / outage / memory / cpu / disk / network / unknown), affected_components list, trigger_event, confidence score (0.0–1.0).
+
+If confidence is below 0.25 or service resolves to "none" / "unknown", the orchestrator routes directly to the Conversationalist for a general chat response, bypassing the full incident pipeline.
+
+Every StreamEvent for this step includes `input` (the first 300 chars of the effective query) and `output` (service / severity / type summary on complete, or the raw error string in `error` on failure).
+
+### Entity Extractor
+
+**Input:** Query + service name + incident type.
+**Output:** `EntityExtractorOutput` — structured `EntityExtraction` (services, deployments, metrics, error_codes, time_range, keywords) + `search_queries` list (Cypher-ready) + `context_summary`.
+
+The `search_queries` are used directly by the Graph Analyzer for targeted Cypher lookups. The `context_summary` is passed to downstream agents for enriched prompting.
+
+### Repo Scout (optional)
+
+**Enabled by default.** Disabled if user removes `repo_scout` from enabled_agents.
+**Requires:** `GITHUB_TOKEN` environment variable. Without it, MCP connection fails and the step emits `error` but the pipeline continues.
+
+**Input:** `owner/repo` derived from the service name, task type, extra context.
+**Output:** `RepoScoutOutput` — summary string, tools_used list.
+
+Uses the `@modelcontextprotocol/server-github` MCP server to fetch recent commits, open PRs, and failing CI checks. Results are appended to `web_context` passed to downstream agents.
+
+### Terraform Scout (optional)
+
+**Enabled by default.** Disabled if user removes `terraform_scout` from enabled_agents.
+
+**Input:** Terraform workspace name (derived from service), task type, extra context.
+**Output:** `TerraformScoutOutput` — summary string, tools_used list.
+
+Uses a Terraform MCP server to inspect workspace state for recent plan/apply runs and infrastructure drift. Results are appended to `web_context`.
 
 ### Graph Analyzer
 
-Runs nine Cypher queries against the Neo4j knowledge graph. Falls back to mock data if Neo4j is unreachable (for development without a running Neo4j instance).
+**Required.** Always runs for incident queries.
 
-Output: `GraphAnalyzerQueryOutput` — upstream_services, downstream_services, blast_radius_count, recent_deployments, related_incidents, runbooks, ownership, graph_summary, dependency_edges.
+Runs nine Cypher queries against the Neo4j knowledge graph. Falls back gracefully if Neo4j is unreachable (development mode returns mock topology data so the pipeline still completes).
+
+**Output:** `GraphAnalyzerQueryOutput`:
+
+- `upstream_services` — services that call the affected service
+- `downstream_services` — services the affected service calls
+- `blast_radius_count` — total nodes in 3-hop dependency radius
+- `recent_deployments` — deployments in the blast radius in the last 24h
+- `related_incidents` — historical incidents affecting blast radius services
+- `runbooks` — runbook references for affected services
+- `ownership` — owning team names and Slack channels
+- `graph_summary` — human-readable topology summary
+- `dependency_edges` — list of `[source, target]` pairs for visualisation
+
+The nine Cypher queries are documented in the Neo4j Knowledge Graph section below.
+
+### Web Searcher (optional)
+
+**Enabled by default.** Disabled if user removes `web_searcher` from enabled_agents.
+
+Runs DuckDuckGo searches for known issues, post-mortems, and CVEs related to the affected service and incident type. Deduplicates results by URL. Results are formatted as a `combined_context` string and prepended to `web_context`.
+
+**Output:** `WebSearchOutput` — results list (title, url, snippet), combined_context, queries_used.
+
+### Ops Analyst (optional)
+
+**Enabled by default.** Disabled if user removes `ops_analyst` from enabled_agents.
+**Requires:** Ops Inspector MCP server running (auto-started if configured).
+
+Uses four MCP tools (parse_stack_trace, calculate_error_rate, format_incident_brief, check_service_health) to analyse telemetry signals. Results are appended to `web_context`.
+
+**Output:** `OpsAnalystOutput` — result string, tools_used list.
+
+### Crew Intelligence (optional)
+
+**Enabled by default.** Disabled if user removes `crew` from enabled_agents.
+
+Runs a three-agent CrewAI crew:
+
+1. **Researcher** — gathers known issues and documentation
+2. **Analyst** — correlates signals from graph, web, and telemetry
+3. **Writer** — synthesises a structured intelligence report
+
+The crew report is appended to `web_context` as `=== CrewAI Intelligence Report ===`.
 
 ### Root Cause Finder
 
-Takes the full pipeline context: query, service, severity, incident_type, graph_context (all nine query results), classification dict, and optional web_context string.
+**Required.** Always runs for incident queries.
 
-Output: `RootCauseFinderOutput` — primary_cause, causal_chain (list of `CausalFactor` with factor + confidence + evidence), contributing_factors, deployment_correlation bool, deployment_version, timeline_reconstruction list, confidence_score, reasoning.
+Takes the full accumulated context: query, service, severity, incident_type, graph_context, classification dict, and the entire `web_context` string (which includes web search, repo scout, terraform scout, ops diagnostics, crew report, and document markdown if uploaded).
+
+**Output:** `RootCauseFinderOutput`:
+
+- `primary_cause` — single sentence describing the root cause
+- `causal_chain` — ordered list of `CausalFactor` (factor, confidence 0–1, evidence string)
+- `contributing_factors` — secondary contributing factors
+- `deployment_correlation` — bool: does a recent deployment correlate?
+- `deployment_version` — version string if correlation found
+- `timeline_reconstruction` — ordered list of events leading to the incident
+- `confidence_score` — overall confidence (0.0–1.0)
+- `reasoning` — extended reasoning trace
 
 ### Remediator
 
-Takes: service, severity, primary_cause, causal_chain, blast_radius dict, deployment_correlation, deployment_version.
+**Required.** Always runs for incident queries.
 
-Output: `RemediatorOutput` — immediate_actions, rollback_steps, mitigation_steps (all `RemediationStep` with order, action, command, expected_outcome, risk_level, estimated_minutes), escalation_paths (team, contact, condition), runbook_references, estimated_resolution_minutes, post_incident_actions, summary.
+**Input:** Service, severity, primary_cause, causal_chain, blast_radius dict, deployment_correlation, deployment_version.
+
+**Output:** `RemediatorOutput`:
+
+- `immediate_actions` — ordered `RemediationStep` list (action, command, expected_outcome, risk_level, estimated_minutes)
+- `rollback_steps` — rollback procedure steps
+- `mitigation_steps` — longer-term mitigation actions
+- `escalation_paths` — team escalation routes (team, contact, condition)
+- `runbook_references` — relevant runbook URLs
+- `estimated_resolution_minutes` — estimated MTTR
+- `post_incident_actions` — post-mortem and follow-up tasks
+- `summary` — single-paragraph remediation overview
 
 ### Conversationalist
 
-Runs on every turn — both incident-relevant and general queries.
+**Required.** Runs on every turn — both incident and off-topic.
 
-For incident queries: synthesises root_cause, remediation_steps, rollback_steps, timeline, blast_radius, causal_chain, and web_citations into a Markdown narrative with a concise summary (≤120 words) for history compaction.
+For incident queries: synthesises root_cause, remediation_steps, rollback_steps, timeline, blast_radius, causal_chain, and web_citations into a Markdown narrative. Also produces a `summary_for_history` (≤120 words) used for history compaction on subsequent turns.
 
-For off-topic queries: generates a helpful direct response without fabricating incident analysis, setting `is_incident_relevant=False`.
+For off-topic queries: generates a helpful direct response without fabricating incident analysis, setting `is_incident_relevant=False`. The pipeline short-circuits after this step without running entity extraction, graph traversal, or root cause analysis.
 
----
-
-## Orchestrator and Streaming
-
-`IncidentOrchestrator.run_with_stream()` is an async generator that yields `StreamEvent` objects. The SSE endpoint in `stream.py` iterates the generator and emits each event as `data: <json>\n\n`.
-
-Each `StreamEvent` carries:
-
-- `event` — event type: step / graph / reasoning / result / error / done
-- `agent` — agent key (e.g. "classifier", "graph_analyzer")
-- `step` — step name within the agent (e.g. "classify", "graph_traversal")
-- `status` — running / complete / error / skipped
-- `data` — dict containing: description, input, output, completed_steps, and agent-specific fields
-
-The `IncidentState` dataclass is the shared mutable context passed between agents within a single orchestrator turn. It accumulates outputs from each agent and is used to build the final `result` event.
+History compaction (`compact_history` in `utils.py`): conversation history beyond the last N turns is replaced with the stored `summary_for_history` value to keep the LLM context window bounded.
 
 ---
 
@@ -281,7 +362,106 @@ MCP-backed agents (RepoScout, TerraformScout, OpsAnalyst) also hold an `asyncio.
 
 ---
 
+## Orchestrator and Streaming
+
+`IncidentOrchestrator.run_with_stream()` is an async generator that yields `StreamEvent` objects. The SSE endpoint in `stream.py` iterates the generator and emits each event as `data: <json>\n\n`.
+
+### StreamEvent structure
+
+Every event has the same envelope:
+
+```python
+StreamEvent(
+    event="step",          # step | graph | reasoning | result | error_event | done
+    agent="classifier",    # agent key
+    step="classify",       # step name within the agent
+    status="complete",     # running | complete | error | skipped
+    data={...},            # agent-specific payload
+)
+```
+
+### data payload fields (present on all running/complete/error blocks)
+
+| Field             | Present on | Description                                           |
+| ----------------- | ---------- | ----------------------------------------------------- |
+| `description`     | all        | Human-readable description of what the step does      |
+| `input`           | all        | First 300 chars of the actual input sent to the agent |
+| `output`          | complete   | First 300–500 chars of the agent's output             |
+| `error`           | error      | Raw exception string                                  |
+| `completed_steps` | complete   | List of all pipeline steps completed so far           |
+
+Additional agent-specific fields (e.g. `causal_chain`, `blast_radius_count`, `tools_used`, `citations`) are also included and visible in the frontend explainability modal's "Raw agent data" section.
+
+### SSE event flow per turn
+
+```
+session → orchestration_start(running) → orchestration_start(complete)
+  → document_processing(running|skipped) → document_processing(complete|error)
+  → classify(running) → classify(complete|error)
+  → entity_extraction(running) → entity_extraction(complete|error)
+  → repo_scouting(running|skipped) → repo_scouting(complete|error)
+  → terraform_scouting(running|skipped) → terraform_scouting(complete|error)
+  → neo4j_operation_plan(running) → graph_traversal(running) → graph_traversal(complete|error)
+  → web_search(running|skipped) → web_search(complete|error)
+  → ops_diagnostics(running|skipped) → ops_diagnostics(complete|error)
+  → crew_enrichment(running|skipped) → crew_enrichment(complete|error)
+  → root_cause_analysis(running) → root_cause_analysis(complete|error)
+  → remediation(running) → remediation(complete|error)
+  → natural_response(running) → natural_response(complete|error)
+  → result(complete)
+  → done
+```
+
+### IncidentState
+
+`IncidentState` (in `orchestrator/models.py`) is the shared mutable dataclass accumulated across the entire turn:
+
+```python
+@dataclass
+class IncidentState:
+    query: str
+    session_id: str
+    service: str | None = None
+    severity: str | None = None
+    incident_type: str | None = None
+    affected_components: list[str] = field(default_factory=list)
+    entities: dict = field(default_factory=dict)
+    classification: dict = field(default_factory=dict)
+    graph_context: dict = field(default_factory=dict)
+    document_context: str = ""
+    document_context_chars: int = 0
+    root_cause: str | None = None
+    causal_chain: list[dict] = field(default_factory=list)
+    remediation_steps: list[str] = field(default_factory=list)
+    rollback_steps: list[str] = field(default_factory=list)
+    escalation_paths: list[dict] = field(default_factory=list)
+    runbook_references: list[str] = field(default_factory=list)
+    timeline: list[str] = field(default_factory=list)
+    web_citations: list[dict] = field(default_factory=list)
+    natural_response: str | None = None
+    conversation_summary: str | None = None
+    is_incident_relevant: bool = True
+    errors: list[str] = field(default_factory=list)
+    completed_steps: list[str] = field(default_factory=list)
+    # ... scout and analyst sub-fields
+```
+
+The final `result` event aggregates all state fields into a single JSON payload that the frontend uses to render the structured assistant message.
+
+### Document context injection
+
+When the SSE endpoint receives a non-empty `document_context` query parameter, it:
+
+1. Adds `"document_processor"` to the `enabled_agents` set automatically.
+2. Passes `document_context` into `IncidentOrchestrator.run_with_stream()`.
+3. The orchestrator sets `state.document_context` and emits the Document Processor step events.
+4. All downstream agents receive the document markdown prepended to the effective query.
+
+---
+
 ## Neo4j Knowledge Graph
+
+The knowledge graph is the core structural data store for service topology, ownership, historical incidents, runbooks, deployments, and configuration changes. It is populated by `app/db/neo4j_seed.py` and kept current by Celery periodic tasks.
 
 ### Node types
 
@@ -297,7 +477,7 @@ MCP-backed agents (RepoScout, TerraformScout, OpsAnalyst) also hold an `asyncio.
 
 ### Relationship types
 
-```
+```cypher
 (Service)-[:DEPENDS_ON]->(Service)
 (Service)-[:OWNED_BY]->(Team)
 (Deployment)-[:DEPLOYED_TO]->(Service)
@@ -307,17 +487,35 @@ MCP-backed agents (RepoScout, TerraformScout, OpsAnalyst) also hold an `asyncio.
 (WebKnowledge)-[:RELATES_TO]->(Service)
 ```
 
-### Cypher queries executed per incident
+### Cypher queries executed per incident (Graph Analyzer)
 
-1. `MATCH (s:Service {name: $service})-[:DEPENDS_ON]->(dep)` — direct dependencies
+1. `MATCH (s:Service {name: $service})-[:DEPENDS_ON]->(dep)` — direct downstream dependencies
 2. `MATCH (caller)-[:DEPENDS_ON]->(s:Service {name: $service})` — upstream callers
-3. `MATCH (s:Service {name: $service})-[:DEPENDS_ON*1..3]->(b)` — blast radius (3-hop)
-4. `MATCH (d:Deployment)-[:DEPLOYED_TO]->(b)` — deployments in blast radius
-5. `MATCH (i:Incident)-[:AFFECTS]->(b)` — historical incidents
-6. `MATCH (r:Runbook)-[:APPLIES_TO]->(b)` — runbooks
-7. `MATCH (t:Team)-[:OWNED_BY]-(b)` — team ownership
-8. `MATCH (c:ConfigChange)-[:CHANGED]->(b)` — config changes
-9. `MATCH (i:Incident)-[:AFFECTS]->(e)` WHERE e.name IN $entities — cross-entity incidents
+3. `MATCH (s:Service {name: $service})-[:DEPENDS_ON*1..3]->(b)` — blast radius (3-hop transitive)
+4. `MATCH (d:Deployment)-[:DEPLOYED_TO]->(b)` — recent deployments in blast radius
+5. `MATCH (i:Incident)-[:AFFECTS]->(b)` — historical incidents in blast radius
+6. `MATCH (r:Runbook)-[:APPLIES_TO]->(b)` — runbooks covering blast radius services
+7. `MATCH (t:Team)-[:OWNED_BY]-(b)` — owning teams for blast radius services
+8. `MATCH (c:ConfigChange)-[:CHANGED]->(b)` — config changes for blast radius services
+9. `MATCH (i:Incident)-[:AFFECTS]->(e) WHERE e.name IN $entities` — cross-entity incidents from entity extraction
+
+### Seeded topology
+
+`neo4j_seed.py` creates a realistic microservices e-commerce stack with the following services: `checkout`, `payment`, `inventory`, `shipping`, `notification`, `user-service`, `product-catalog`, `search`, `recommendation`, `api-gateway`. All services have `DEPENDS_ON` relationships, `OWNED_BY` team relationships, and associated `Deployment`, `Incident`, `Runbook`, and `ConfigChange` nodes with realistic timestamps and metadata.
+
+### Celery graph maintenance tasks
+
+| Task                             | Schedule        | What it does                                                                                                        |
+| -------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `refresh_service_health`         | Every 15 min    | Fetches health signals (simulated) and updates Service node `status` properties                                     |
+| `sync_web_intelligence_to_graph` | Every hour      | Creates `WebKnowledge` nodes from CVE feeds, post-mortems, and advisory sources and links them to affected services |
+| `prune_stale_incidents`          | Daily 02:00 UTC | Deletes resolved `Incident` nodes older than 90 days to prevent graph bloat                                         |
+
+The broker and result backend for all Celery tasks are Redis (`REDIS_URL`).
+
+### Development without Neo4j
+
+The `GraphAnalyzerAgent` catches connection errors and returns a mock `GraphAnalyzerQueryOutput` with a realistic stub topology. This allows full end-to-end testing of the pipeline without a running Neo4j instance. Set `NEO4J_URI` in `.env` to enable the real graph.
 
 ---
 
@@ -355,34 +553,74 @@ The auth system lives in `app/services/auth_service.py` and `app/core/security.p
 
 ## Security Guardrails
 
-All user input (query + document_context) passes through `app/core/guardrails.py` before reaching any LLM:
+All user input — both the `query` string and `document_context` (uploaded file markdown) — passes through `app/core/guardrails.py` **before** being stored in the database or forwarded to any LLM. Guardrail violations abort the entire SSE stream with an `error_event` containing `code: GUARDRAIL_VIOLATION`.
 
 ### apply_all(text) pipeline
 
-1. `sanitise_input(text)` — strips null bytes and control characters
-2. `enforce_length(text)` — truncates to `MAX_QUERY_LENGTH` (4000 chars)
-3. `check_prompt_injection(text)` — raises `GuardrailViolation` if injection patterns matched
-4. `scrub_pii(text)` — redacts PII using Presidio or regex fallback
+```python
+apply_all(text)
+  → sanitise_input(text)        # strip null bytes and control characters
+  → enforce_length(text)        # truncate to MAX_QUERY_LENGTH (4000 chars)
+  → check_prompt_injection(text) # raise GuardrailViolation if injection matched
+  → scrub_pii(text)             # redact PII (Presidio or regex fallback)
+```
+
+All four steps run on both `query` and `document_context` independently before they are combined.
 
 ### Injection patterns detected
 
-The regex set covers: "ignore all previous instructions", "forget everything", "you are now", "pretend to be", "act as", "jailbreak", "bypass", "reveal your prompt", "system prompt", and similar known attack phrases.
+The regex set in `check_prompt_injection` covers (case-insensitive, partial match):
+
+- `ignore all previous instructions`
+- `forget everything`
+- `you are now`
+- `pretend to be`
+- `act as`
+- `jailbreak`
+- `bypass`
+- `reveal your prompt`
+- `system prompt`
+- `disregard`
+- `override`
+- `new persona`
+- and additional known attack patterns
 
 ### PII scrubbing
 
-When `microsoft-presidio` is installed: uses NLP entity recognition for PERSON, EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, IP_ADDRESS, US_SSN, and more.
+**With `microsoft-presidio` installed:** Uses spaCy NLP entity recognition for PERSON, EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, IP_ADDRESS, US_SSN, IBAN_CODE, and more. Detected entities are replaced with `<REDACTED_TYPE>` placeholders.
 
-Regex fallback: matches email addresses (`[\w.-]+@[\w.-]+`) and IPv4 addresses (`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`).
+**Regex fallback (no Presidio):** Matches and redacts:
+
+- Email addresses: `[\w.-]+@[\w.-]+`
+- IPv4 addresses: `\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`
+
+### Frontend guardrail handling
+
+The SSE stream function in the frontend catches `error_event` messages with `code: GUARDRAIL_VIOLATION` and displays a system error message in the chat panel rather than treating it as an agent step failure. This gives users a clear, actionable message without leaking internal pipeline details.
 
 ---
 
 ## MCP Integrations
 
-MCP (Model Context Protocol) allows agents to call external tools through a standardised protocol. The `MCPClientManager` in `mcp_servers/mcp_client_manager.py` manages async MCP client lifecycles.
+MCP (Model Context Protocol) is an open standard for connecting LLM agents to external tools and data sources through a unified client–server protocol. Ops-Pilot uses MCP for three integrations: GitHub, Terraform, and the custom Ops Inspector diagnostic server.
+
+### MCPClientManager
+
+`mcp_servers/mcp_client_manager.py` manages the lifecycle of MCP client connections:
+
+- Reads `servers.json` for server configurations
+- Expands `${VAR}` environment variable references in `env` blocks at connection time
+- Starts MCP server processes (via `stdio` transport for local servers)
+- Maintains a dict of `{server_name: MCPClient}` instances
+- Provides `get_tools(server_name)` to list available tools
+- Provides `call_tool(server_name, tool_name, args)` for tool invocation
+- Handles connection failure gracefully — agents log a warning and produce degraded output rather than crashing
+
+Each MCP-backed agent (`RepoScoutAgent`, `TerraformScoutAgent`, `OpsAnalystAgent`) holds an `asyncio.Lock` for lazy one-time async initialisation and a `_tool_names` list populated after the MCP connection is established.
 
 ### servers.json structure
 
-```
+```json
 {
   "github": {
     "command": "npx",
@@ -392,8 +630,9 @@ MCP (Model Context Protocol) allows agents to call external tools through a stan
     }
   },
   "terraform": {
-    "command": "...",
-    "args": [...]
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-terraform"],
+    "env": {}
   },
   "ops-inspector": {
     "command": "python",
@@ -402,18 +641,26 @@ MCP (Model Context Protocol) allows agents to call external tools through a stan
 }
 ```
 
-Environment variable substitution (`${VAR}`) is handled by `MCPClientManager` at connection time.
+### GitHub MCP (Repo Scout)
 
-### Ops Inspector MCP Server
+Uses `@modelcontextprotocol/server-github`. Requires `GITHUB_TOKEN` (Personal Access Token with `repo` and `read:org` scopes). Tools used: `list_commits`, `list_pull_requests`, `list_check_runs`. The service name is split on `/` to derive `owner/repo`.
 
-A custom MCP server (`mcp_servers/servers/ops_inspector.py`) that exposes four tools to the `OpsAnalystAgent`:
+### Terraform MCP (Terraform Scout)
 
-| Tool                    | Description                                                |
-| ----------------------- | ---------------------------------------------------------- |
-| `parse_stack_trace`     | Identifies exception type, root frame, and likely cause    |
-| `calculate_error_rate`  | Computes error rate, labels severity, checks SLO threshold |
-| `format_incident_brief` | Structures incident data into a standardised brief format  |
-| `check_service_health`  | Evaluates service health from provided metric signals      |
+Uses a Terraform MCP server. Inspects workspace state for recent `plan` and `apply` runs, detects resource drift, and summarises IaC changes. No additional credentials required beyond workspace access.
+
+### Ops Inspector MCP Server (custom)
+
+`mcp_servers/servers/ops_inspector.py` is a custom MCP server built with the `mcp` Python SDK. It exposes four tools:
+
+| Tool                    | Input                                             | Output                                        |
+| ----------------------- | ------------------------------------------------- | --------------------------------------------- |
+| `parse_stack_trace`     | `stack_trace: str`                                | Exception type, root frame, likely cause      |
+| `calculate_error_rate`  | `errors: int, requests: int, window_seconds: int` | Error rate %, severity label, SLO breach flag |
+| `format_incident_brief` | `service, severity, description, timestamp`       | Structured incident brief dict                |
+| `check_service_health`  | `metrics: dict`                                   | Health status, anomaly list, recommendation   |
+
+The Ops Inspector server is started automatically by the `MCPClientManager` as a subprocess using Python's `mcp` package stdio transport.
 
 ---
 
