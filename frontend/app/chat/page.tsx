@@ -33,6 +33,7 @@ import {
   Send,
   Shield,
   Sparkles,
+  Square,
   Terminal,
   Trash2,
   Wrench,
@@ -56,6 +57,7 @@ type ChatSessionLocal = {
   createdAt: string;
   backendSessionId: string | null;
   messages: Message[];
+  explainabilityEvents: ExplainabilityEvent[];
 };
 
 type Attachment = {
@@ -225,6 +227,7 @@ function newSession(): ChatSessionLocal {
           "Ops-Pilot is ready. Paste an incident summary or upload supported documents: PDF, DOC, DOCX, PPT, PPTX, XLS, XLSX, HTML, Markdown, CSV, and TXT. Uploaded documents are converted to markdown by the Document Processor and sent with the same chat turn.",
       },
     ],
+    explainabilityEvents: [],
   };
 }
 
@@ -232,7 +235,13 @@ function loadSessions(): ChatSessionLocal[] {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [newSession()];
+    if (!Array.isArray(parsed) || parsed.length === 0) return [newSession()];
+    return parsed.map((s: ChatSessionLocal) => ({
+      ...s,
+      explainabilityEvents: Array.isArray(s.explainabilityEvents)
+        ? s.explainabilityEvents
+        : [],
+    }));
   } catch {
     return [newSession()];
   }
@@ -999,12 +1008,25 @@ export default function ChatPage() {
     "orchestrator",
   ]);
 
-  const [explainabilityEvents, setExplainabilityEvents] = useState<
-    ExplainabilityEvent[]
-  >([]);
-
   const [selectedEvent, setSelectedEvent] =
     useState<ExplainabilityEvent | null>(null);
+
+  function setExplainabilityEvents(
+    updater:
+      | ExplainabilityEvent[]
+      | ((prev: ExplainabilityEvent[]) => ExplainabilityEvent[]),
+  ) {
+    setSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeId) return s;
+        const next =
+          typeof updater === "function"
+            ? updater(s.explainabilityEvents ?? [])
+            : updater;
+        return { ...s, explainabilityEvents: next };
+      }),
+    );
+  }
 
   const fileRef = useRef<HTMLInputElement>(null);
   const stopStreamRef = useRef<(() => void) | null>(null);
@@ -1040,6 +1062,9 @@ export default function ChatPage() {
   const activeSession =
     sessions.find((session) => session.id === activeId) ?? sessions[0];
   const messages = activeSession?.messages ?? [];
+
+  const explainabilityEvents: ExplainabilityEvent[] =
+    activeSession?.explainabilityEvents ?? [];
 
   const latestAgentStatus = useMemo(() => {
     const statuses: Record<string, string> = {};
@@ -1122,7 +1147,6 @@ export default function ChatPage() {
     setInput("");
     setAttachments([]);
     setActiveAgentKeys(["orchestrator"]);
-    setExplainabilityEvents([]);
   }
 
   function deleteSession(id: string) {
@@ -1756,14 +1780,43 @@ export default function ChatPage() {
               placeholder="Paste incident details, or upload documents to send with this turn..."
               className="flex-1 min-h-[52px] max-h-36 resize-y bg-surface-2 border border-border-1 rounded-lg px-4 py-3 text-sm font-mono text-chrome placeholder:text-chrome-dim/60 focus:outline-none focus:border-plasma"
             />
-            <button
-              type="submit"
-              disabled={uploading || running}
-              className="self-end h-[52px] px-5 rounded-lg bg-plasma text-void font-display font-bold hover:bg-plasma-dim transition-colors flex items-center gap-2 disabled:opacity-60"
-            >
-              <Send size={16} />
-              {running ? "Running" : uploading ? "Uploading" : "Analyze"}
-            </button>
+            {running ? (
+              <button
+                type="button"
+                onClick={() => {
+                  stopStreamRef.current?.();
+                  stopStreamRef.current = null;
+                  setRunning(false);
+                  updateActiveSession((session) => {
+                    const copy = [...session.messages];
+                    const last = copy[copy.length - 1];
+                    if (
+                      last?.role === "assistant" &&
+                      last.content.startsWith("Running orchestration")
+                    ) {
+                      copy[copy.length - 1] = {
+                        ...last,
+                        content: "⚠ Analysis cancelled.",
+                      };
+                    }
+                    return { ...session, messages: copy };
+                  });
+                }}
+                className="self-end h-[52px] px-5 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 font-display font-bold hover:bg-red-500/30 transition-colors flex items-center gap-2"
+              >
+                <Square size={16} />
+                Cancel
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={uploading}
+                className="self-end h-[52px] px-5 rounded-lg bg-plasma text-void font-display font-bold hover:bg-plasma-dim transition-colors flex items-center gap-2 disabled:opacity-60"
+              >
+                <Send size={16} />
+                {uploading ? "Uploading" : "Analyze"}
+              </button>
+            )}
           </form>
         </section>
 

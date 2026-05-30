@@ -15,8 +15,6 @@ import {
   Wrench,
 } from "lucide-react";
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
 interface LLMConfig {
   provider: "openai" | "anthropic" | "google";
   api_key: string;
@@ -90,8 +88,6 @@ function defaultGitHub(): GitHubConfig {
 function defaultTerraform(): TerraformConfig {
   return { terraform_token: "", terraform_workspace: "" };
 }
-
-// ── Field components ───────────────────────────────────────────────────────
 
 function FieldLabel({
   label,
@@ -168,8 +164,6 @@ function SecretInput({
   );
 }
 
-// ── Provider presets ───────────────────────────────────────────────────────
-
 const PROVIDER_PRESETS: Record<
   LLMConfig["provider"],
   { defaultModel: string; modelOptions: string[] }
@@ -192,8 +186,6 @@ const PROVIDER_PRESETS: Record<
   },
 };
 
-// ── Main page ──────────────────────────────────────────────────────────────
-
 export default function SettingsPage() {
   const [llm, setLLM] = useState<LLMConfig>(defaultLLM());
   const [github, setGitHub] = useState<GitHubConfig>(defaultGitHub());
@@ -203,10 +195,15 @@ export default function SettingsPage() {
   const [githubStatus, setGithubStatus] = useState<SaveStatus>("idle");
   const [terraformStatus, setTerraformStatus] = useState<SaveStatus>("idle");
   const [mounted, setMounted] = useState(false);
+  const [customModel, setCustomModel] = useState("");
 
-  // Load from localStorage after mount (SSR-safe)
   useEffect(() => {
-    setLLM(loadLLMConfig());
+    const savedLLM = loadLLMConfig();
+    setLLM(savedLLM);
+    const preset = PROVIDER_PRESETS[savedLLM.provider];
+    if (!preset.modelOptions.includes(savedLLM.model_name)) {
+      setCustomModel(savedLLM.model_name);
+    }
     setGitHub(loadGitHubConfig());
     setTerraform(loadTerraformConfig());
     setMounted(true);
@@ -249,7 +246,6 @@ export default function SettingsPage() {
     setLLMStatus("saving");
     try {
       localStorage.setItem("ops_pilot_llm_config", JSON.stringify(llm));
-      // Persist to backend env via settings endpoint (best-effort)
       await fetch(
         `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/settings/llm`,
         {
@@ -445,8 +441,20 @@ export default function SettingsPage() {
                   <FieldLabel label="Model" optional />
                   <div className="flex gap-2">
                     <select
-                      value={llm.model_name}
-                      onChange={(e) => updateLLM("model_name", e.target.value)}
+                      value={
+                        preset.modelOptions.includes(llm.model_name)
+                          ? llm.model_name
+                          : "custom"
+                      }
+                      onChange={(e) => {
+                        if (e.target.value === "custom") {
+                          setCustomModel("");
+                          updateLLM("model_name", "");
+                        } else {
+                          setCustomModel("");
+                          updateLLM("model_name", e.target.value);
+                        }
+                      }}
                       className="flex-1 bg-surface-2 border border-border-1 rounded px-3 py-2 text-xs font-mono text-chrome focus:outline-none focus:border-plasma transition-colors"
                     >
                       {preset.modelOptions.map((m) => (
@@ -457,11 +465,14 @@ export default function SettingsPage() {
                       <option value="custom">Custom…</option>
                     </select>
                   </div>
-                  {llm.model_name === "custom" && (
+                  {!preset.modelOptions.includes(llm.model_name) && (
                     <div className="mt-2">
                       <Input
-                        value=""
-                        onChange={(v) => updateLLM("model_name", v)}
+                        value={customModel}
+                        onChange={(v) => {
+                          setCustomModel(v);
+                          updateLLM("model_name", v);
+                        }}
                         placeholder="Enter model name"
                       />
                     </div>
