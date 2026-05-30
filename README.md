@@ -97,7 +97,7 @@ Extracts service name, severity (P0–P3), incident type, affected components, t
 
 Parses the query for structured entities: service names, deployments, metrics, error codes, time ranges, and Cypher-ready search keywords for downstream graph and web queries.
 
-### 3. Document Processor
+### 3. Document Processor (optional)
 
 Converts uploaded attachments (PDF, DOCX, PPTX, XLS/XLSX, HTML, Markdown, CSV, TXT) to Markdown and injects them into the pipeline context. All downstream agents receive the full document context.
 
