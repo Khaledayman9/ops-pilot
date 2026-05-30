@@ -28,13 +28,13 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 describe("getAccessToken", () => {
   it("returns the access token when present", () => {
-    mockCookies.get.mockReturnValue("my-token" as any);
+    (mockCookies.get as jest.Mock).mockReturnValue("my-token");
     expect(getAccessToken()).toBe("my-token");
     expect(mockCookies.get).toHaveBeenCalledWith("access_token");
   });
 
   it("returns undefined when no token is stored", () => {
-    mockCookies.get.mockReturnValue(undefined as any);
+    (mockCookies.get as jest.Mock).mockReturnValue(undefined);
     expect(getAccessToken()).toBeUndefined();
   });
 });
@@ -49,12 +49,12 @@ describe("setTokens", () => {
     expect(mockCookies.set).toHaveBeenCalledWith(
       "access_token",
       "acc-123",
-      expect.objectContaining({ sameSite: "strict" }),
+      expect.objectContaining<Record<string, unknown>>({ sameSite: "strict" }),
     );
     expect(mockCookies.set).toHaveBeenCalledWith(
       "refresh_token",
       "ref-456",
-      expect.objectContaining({ sameSite: "strict" }),
+      expect.objectContaining<Record<string, unknown>>({ sameSite: "strict" }),
     );
   });
 
@@ -68,7 +68,7 @@ describe("setTokens", () => {
     expect(mockCookies.set).toHaveBeenCalledWith(
       "access_token",
       "acc",
-      expect.objectContaining({ secure: true }),
+      expect.objectContaining<Record<string, unknown>>({ secure: true }),
     );
     Object.defineProperty(process.env, "NODE_ENV", { value: original });
   });

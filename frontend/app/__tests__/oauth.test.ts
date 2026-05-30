@@ -18,18 +18,20 @@ jest.mock("js-cookie", () => ({
 
 const mockCookies = Cookies as jest.Mocked<typeof Cookies>;
 
-function mockFetch(status: number, body: unknown) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: String(status),
-    json: jest.fn().mockResolvedValue(body),
-  } as unknown as Response);
+function mockFetch(status: number, body: unknown): void {
+  (global as unknown as { fetch: jest.Mock }).fetch = jest
+    .fn()
+    .mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: String(status),
+      json: jest.fn().mockResolvedValue(body),
+    } as unknown as Response);
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockCookies.get.mockReturnValue(undefined as any);
+  (mockCookies.get as jest.Mock).mockReturnValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -51,7 +53,8 @@ describe("startOAuth()", () => {
       "github",
       "https://app.example.com/auth/callback?provider=github",
     );
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
+    const fetchCall = (global as unknown as { fetch: jest.Mock }).fetch.mock
+      .calls[0];
     expect(fetchCall[0]).toContain("/api/v1/auth/oauth/github/start");
   });
 
@@ -82,12 +85,12 @@ describe("finishOAuth()", () => {
     expect(mockCookies.set).toHaveBeenCalledWith(
       "access_token",
       "acc",
-      expect.anything(),
+      expect.objectContaining<Record<string, unknown>>({}),
     );
     expect(mockCookies.set).toHaveBeenCalledWith(
       "refresh_token",
       "ref",
-      expect.anything(),
+      expect.objectContaining<Record<string, unknown>>({}),
     );
   });
 
@@ -98,7 +101,8 @@ describe("finishOAuth()", () => {
       token_type: "bearer",
     });
     await finishOAuth("github", "code-xyz", "http://localhost/cb");
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
+    const fetchCall = (global as unknown as { fetch: jest.Mock }).fetch.mock
+      .calls[0];
     const body = JSON.parse(fetchCall[1].body);
     expect(body.code).toBe("code-xyz");
     expect(body.redirect_uri).toBe("http://localhost/cb");
@@ -118,13 +122,13 @@ describe("finishOAuth()", () => {
 describe("refreshTokens()", () => {
   it("throws ApiException immediately when no refresh token in cookie", async () => {
     global.fetch = jest.fn();
-    mockCookies.get.mockReturnValue(undefined as any);
+    (mockCookies.get as jest.Mock).mockReturnValue(undefined);
     await expect(refreshTokens()).rejects.toBeInstanceOf(ApiException);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("exchanges refresh token and stores new tokens", async () => {
-    mockCookies.get.mockReturnValue("old-refresh-token" as any);
+    (mockCookies.get as jest.Mock).mockReturnValue("old-refresh-token");
     mockFetch(200, {
       access_token: "new-acc",
       refresh_token: "new-ref",
@@ -135,12 +139,12 @@ describe("refreshTokens()", () => {
     expect(mockCookies.set).toHaveBeenCalledWith(
       "access_token",
       "new-acc",
-      expect.anything(),
+      expect.objectContaining<Record<string, unknown>>({}),
     );
   });
 
   it("throws ApiException when refresh token is expired", async () => {
-    mockCookies.get.mockReturnValue("expired-token" as any);
+    (mockCookies.get as jest.Mock).mockReturnValue("expired-token");
     mockFetch(401, { detail: "Refresh token expired" });
     await expect(refreshTokens()).rejects.toBeInstanceOf(ApiException);
   });

@@ -23,18 +23,20 @@ jest.mock("js-cookie", () => ({
 
 const mockCookies = Cookies as jest.Mocked<typeof Cookies>;
 
-function mockFetch(status: number, body: unknown) {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    statusText: String(status),
-    json: jest.fn().mockResolvedValue(body),
-  } as unknown as Response);
+function mockFetch(status: number, body: unknown): void {
+  (global as unknown as { fetch: jest.Mock }).fetch = jest
+    .fn()
+    .mockResolvedValue({
+      ok: status >= 200 && status < 300,
+      status,
+      statusText: String(status),
+      json: jest.fn().mockResolvedValue(body),
+    } as unknown as Response);
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockCookies.get.mockReturnValue(undefined as any);
+  (mockCookies.get as jest.Mock).mockReturnValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -124,7 +126,7 @@ describe("logout()", () => {
 // ---------------------------------------------------------------------------
 describe("getMe()", () => {
   it("sends Authorization header when token exists", async () => {
-    mockCookies.get.mockReturnValue("my-token" as any);
+    (mockCookies.get as jest.Mock).mockReturnValue("my-token");
     const user = {
       id: "1",
       email: "a@b.com",
@@ -134,7 +136,8 @@ describe("getMe()", () => {
     };
     mockFetch(200, user);
     await getMe();
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
+    const fetchCall = (global as unknown as { fetch: jest.Mock }).fetch.mock
+      .calls[0];
     expect(fetchCall[1].headers.Authorization).toBe("Bearer my-token");
   });
 
@@ -189,7 +192,8 @@ describe("deleteChat()", () => {
   it("calls DELETE on the correct endpoint", async () => {
     mockFetch(204, null);
     await deleteChat("session-abc");
-    const fetchCall = (global.fetch as jest.Mock).mock.calls[0];
+    const fetchCall = (global as unknown as { fetch: jest.Mock }).fetch.mock
+      .calls[0];
     expect(fetchCall[0]).toContain("/api/v1/chat/session-abc");
     expect(fetchCall[1].method).toBe("DELETE");
   });

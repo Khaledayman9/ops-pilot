@@ -41,8 +41,9 @@ class MockEventSource {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockCookies.get.mockReturnValue(undefined as any);
-  (global as unknown as { EventSource: unknown }).EventSource = MockEventSource;
+  (mockCookies.get as jest.Mock).mockReturnValue(undefined);
+  (global as unknown as { EventSource: typeof MockEventSource }).EventSource =
+    MockEventSource;
 });
 
 // ---------------------------------------------------------------------------
@@ -102,7 +103,7 @@ describe("streamIncident()", () => {
   });
 
   it("appends token to URL when access token is present", () => {
-    mockCookies.get.mockReturnValue("tok-abc" as any);
+    (mockCookies.get as jest.Mock).mockReturnValue("tok-abc");
     streamIncident("q", null, "", [], jest.fn(), jest.fn(), jest.fn());
     expect(MockEventSource.instance.url).toContain("token=tok-abc");
   });
