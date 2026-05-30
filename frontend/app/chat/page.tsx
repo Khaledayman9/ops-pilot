@@ -88,6 +88,8 @@ const requiredAgentKeys = new Set([
   "conversationalist",
 ]);
 
+const documentOnlyAgentKeys = new Set(["document_processor"]);
+
 const agentTimeline = [
   {
     name: "Orchestrator",
@@ -103,7 +105,7 @@ const agentTimeline = [
     icon: FileText,
     color: "#00ff88",
     status: "Adds document context",
-    required: true,
+    required: false,
   },
   {
     name: "Classifier",
@@ -198,7 +200,9 @@ const agentTimeline = [
 const defaultEnabledAgentKeys = agentTimeline
   .filter(
     (agent) =>
-      agent.required || !["repo_scout", "terraform_scout"].includes(agent.key),
+      !documentOnlyAgentKeys.has(agent.key) &&
+      (agent.required ||
+        !["repo_scout", "terraform_scout"].includes(agent.key)),
   )
   .map((agent) => agent.key);
 
@@ -615,6 +619,7 @@ function ExplainabilityModal({
     "root_cause",
     "results_count",
     "report_length",
+    "characters",
   ]);
 
   const rawEntries = ev.rawData
@@ -721,8 +726,9 @@ function ExplainabilityModal({
             </div>
           )}
 
-          {/* What this step does — description from backend */}
-          {ev.detail && (
+          {/* What this step does — description from backend.
+              Hidden when in error state to avoid duplicating the error string. */}
+          {ev.detail && !isErrorStatus(ev.status) && (
             <div className="mb-4 border-l-2 border-plasma/40 pl-3">
               <p className="text-[10px] text-plasma font-mono uppercase tracking-widest mb-1">
                 What this step does
@@ -733,7 +739,7 @@ function ExplainabilityModal({
             </div>
           )}
 
-          {/* Error */}
+          {/* Error — shown only when status is error; detail suppressed above to prevent repeat */}
           {ev.errorInfo && (
             <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-3">
               <p className="text-[11px] text-red-400 font-mono uppercase tracking-widest mb-2">
@@ -1146,6 +1152,11 @@ export default function ChatPage() {
           characters: doc.characters,
         })),
       ]);
+      setEnabledAgentKeys((prev) =>
+        prev.includes("document_processor")
+          ? prev
+          : [...prev, "document_processor"],
+      );
     } catch (error) {
       const detail =
         error instanceof Error ? error.message : "Document upload failed.";
@@ -1230,18 +1241,22 @@ export default function ChatPage() {
       ? String(rawOutput).slice(0, 600) || null
       : null;
 
+    const isError = ["error", "failed", "failure"].includes(
+      (event.status ?? "").toLowerCase(),
+    );
+
     const detail = String(
       (raw?.description as string | undefined) ??
         (raw?.message as string | undefined) ??
-        (raw?.error as string | undefined) ??
+        (!isError ? (raw?.error as string | undefined) : undefined) ??
         event.detail ??
         event.message ??
         event.result ??
-        "Step updated",
+        (isError ? "Step failed — see error details below." : "Step updated"),
     ).slice(0, 600);
 
     const errorInfo: string | null = raw?.error
-      ? String(raw.error).slice(0, 400)
+      ? String(raw.error).slice(0, 600)
       : null;
 
     setExplainabilityEvents((prev: ExplainabilityEvent[]) => [
@@ -1339,6 +1354,12 @@ export default function ChatPage() {
       ...(documentContext ? ["document_processor"] : []),
     ]);
 
+    if (!documentContext) {
+      setEnabledAgentKeys((prev) =>
+        prev.filter((k) => k !== "document_processor"),
+      );
+    }
+
     stopStreamRef.current?.();
     stopStreamRef.current = streamIncident(
       text || "Analyze uploaded document context.",
@@ -1422,6 +1443,7 @@ export default function ChatPage() {
         appendAssistant(`Orchestration error: ${error.message}`);
         setRunning(false);
       },
+      attachments.map((a) => a.filename),
     );
   }
 
@@ -1481,7 +1503,9 @@ export default function ChatPage() {
               {agentTimeline.map((agent) => {
                 const active = activeAgents.some((a) => a.key === agent.key);
                 const enabled = enabledAgentKeys.includes(agent.key);
-                const toggleDisabled = requiredAgentKeys.has(agent.key);
+                const isDocumentAgent = documentOnlyAgentKeys.has(agent.key);
+                const toggleDisabled =
+                  requiredAgentKeys.has(agent.key) || isDocumentAgent;
                 const latestStatus = latestAgentStatus[agent.key];
 
                 return (

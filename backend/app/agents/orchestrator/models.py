@@ -16,6 +16,7 @@ class IncidentState(BaseModel):
     # Document processor output
     document_context: str = ""
     document_context_chars: int = 0
+    document_filenames: list = Field(default_factory=list)
 
     # Entity extractor output
     entities: dict = Field(default_factory=dict)

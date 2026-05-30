@@ -221,10 +221,13 @@ export function streamIncident(
   onEvent: (e: StreamEvent) => void,
   onDone: (sessionId: string) => void,
   onError: (err: Error | ApiException) => void,
+  attachmentFilenames?: string[],
 ): () => void {
   const params = new URLSearchParams({ query });
   if (sessionId) params.set("session_id", sessionId);
   if (documentContext.trim()) params.set("document_context", documentContext);
+  if (attachmentFilenames && attachmentFilenames.length > 0)
+    params.set("document_filenames", attachmentFilenames.join(","));
   if (enabledAgents.length)
     params.set("enabled_agents", enabledAgents.join(","));
 

@@ -35,6 +35,9 @@ async def stream_incident(
     document_context: str | None = Query(
         None, description="Markdown converted from uploaded documents"
     ),
+    document_filenames: str | None = Query(
+        None, description="Comma-separated original filenames of uploaded documents"
+    ),
     enabled_agents: str | None = Query(None, description="Comma-separated enabled agent keys"),
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
@@ -81,16 +84,25 @@ async def stream_incident(
     prior_messages = await chat_svc.get_messages(session_id)
     history_dicts = [{"role": m.role, "content": m.content} for m in prior_messages[:-1]]
 
+    parsed_filenames = (
+        [f.strip() for f in document_filenames.split(",") if f.strip()]
+        if document_filenames
+        else []
+    )
+
     async def generator():
         yield {"event": "session", "data": json.dumps({"session_id": session_id})}
 
         result_data: dict = {}
         enabled = set(enabled_agents.split(",")) if enabled_agents else None
+        if safe_document_context:
+            enabled = (enabled or set()) | {"document_processor"}
         orchestrator = IncidentOrchestrator()
         async for event in orchestrator.run_with_stream(
             safe_query,
             session_id,
             document_context=safe_document_context,
+            document_filenames=parsed_filenames,
             enabled_agents=enabled,
             chat_history=history_dicts,
         ):

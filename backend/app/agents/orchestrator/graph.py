@@ -8,6 +8,7 @@ from logger import logger
 from ..classifier import ClassificationInput, ClassifierAgent
 from ..conversationalist import ConversationalistAgent, ConversationalistInput
 from ..crew.incident_crew import IncidentAnalysisCrew
+from ..document_processor import DocumentProcessorAgent, DocumentProcessorInput
 from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
 from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
 from ..ops_analyst import AnalysisTask, OpsAnalystAgent, OpsAnalystInput
@@ -18,6 +19,7 @@ from ..terraform_scouter import TerraformScoutAgent, TerraformScoutInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
 from .utils import build_analysis_context, compact_history
+
 
 DEFAULT_ENABLED_AGENTS = {
     "orchestrator",
@@ -47,6 +49,7 @@ REQUIRED_AGENTS = {
 
 class IncidentOrchestrator:
     def __init__(self) -> None:
+        self._document_processor = DocumentProcessorAgent()
         self._classifier = ClassifierAgent()
         self._extractor = EntityExtractorAgent()
         self._repo_scout = RepoScoutAgent()
@@ -64,6 +67,7 @@ class IncidentOrchestrator:
         query: str,
         session_id: str,
         document_context: str = "",
+        document_filenames: list[str] | None = None,
         enabled_agents: set[str] | None = None,
         chat_history: list[dict] | None = None,
     ) -> AsyncGenerator[StreamEvent, None]:
@@ -72,16 +76,9 @@ class IncidentOrchestrator:
         state = IncidentState(query=query, session_id=session_id)
         state.document_context = document_context or ""
         state.document_context_chars = len(state.document_context)
+        state.document_filenames = document_filenames or []
 
         compacted_history = compact_history(chat_history or [])
-
-        effective_query = query
-        if state.document_context:
-            effective_query = (
-                f"{query}\n\n"
-                "=== Uploaded Document Context Converted By Document Processor ===\n"
-                f"{state.document_context}"
-            )
 
         yield StreamEvent(
             event="step",
@@ -96,22 +93,81 @@ class IncidentOrchestrator:
                 "output": f"Pipeline starting with {len(enabled_agents)} agents enabled",
             },
         )
-
-        if state.document_context:
-            state.completed_steps.append("document_processing")
+        if "document_processor" in enabled_agents and state.document_context:
+            filenames_label = (
+                ", ".join(state.document_filenames) if state.document_filenames else "uploaded document"
+            )
             yield StreamEvent(
                 event="step",
                 agent="document_processor",
                 step="document_processing",
-                status="complete",
+                status="running",
                 data={
-                    "message": "Document markdown attached to this orchestration turn",
-                    "description": "Converts uploaded files (PDF, DOCX, etc.) to markdown and injects them into the pipeline context for all downstream agents.",
-                    "input": query[:300],
-                    "output": f"Attached {state.document_context_chars} chars of document markdown to pipeline",
-                    "characters": state.document_context_chars,
-                    "completed_steps": list(state.completed_steps),
+                    "message": f"Processing {filenames_label}",
+                    "description": "Validates and registers uploaded document markdown into the pipeline context. All downstream agents will receive the document content alongside the query.",
+                    "input": f"Files: {filenames_label} | Query: {query[:200]}",
                 },
+            )
+            try:
+                doc_out = await self._document_processor.run(
+                    DocumentProcessorInput(
+                        file_path="__inline__",
+                        filename=filenames_label,
+                        mime_type="text/markdown",
+                        inline_content=state.document_context,
+                    )
+                )
+                state.document_context = doc_out.markdown or state.document_context
+                state.document_context_chars = len(state.document_context)
+                state.completed_steps.append("document_processing")
+                yield StreamEvent(
+                    event="step",
+                    agent="document_processor",
+                    step="document_processing",
+                    status="complete",
+                    data={
+                        "message": "Document context registered in pipeline",
+                        "description": "Document markdown validated and injected into pipeline context for all downstream agents.",
+                        "input": f"Files: {filenames_label} | Query: {query[:200]}",
+                        "output": f"Registered {state.document_context_chars} chars from {filenames_label}",
+                        "characters": state.document_context_chars,
+                        "filenames": state.document_filenames,
+                        "completed_steps": list(state.completed_steps),
+                    },
+                )
+            except Exception as exc:
+                logger.error(f"[Orchestrator] DocumentProcessor: {exc}")
+                state.errors.append(str(exc))
+                # Document context is still available from the raw input —
+                # log the error but continue with the original markdown.
+                state.completed_steps.append("document_processing")
+                yield StreamEvent(
+                    event="step",
+                    agent="document_processor",
+                    step="document_processing",
+                    status="error",
+                    data={
+                        "error": str(exc),
+                        "input": f"Files: {filenames_label} | Query: {query[:200]}",
+                        "description": "Document processor agent failed — falling back to raw uploaded markdown.",
+                    },
+                )
+        elif "document_processor" not in enabled_agents:
+            yield StreamEvent(
+                event="step",
+                agent="document_processor",
+                step="document_processing",
+                status="skipped",
+                data={"message": "Document Processor disabled — no file uploaded"},
+            )
+
+        # Build effective_query now that document_context is finalised by the processor.
+        effective_query = query
+        if state.document_context:
+            effective_query = (
+                f"{query}\n\n"
+                "=== Uploaded Document Context Converted By Document Processor ===\n"
+                f"{state.document_context}"
             )
 
         yield StreamEvent(
@@ -155,7 +211,11 @@ class IncidentOrchestrator:
                 agent="classifier",
                 step="classify",
                 status="error",
-                data={"error": str(exc)},
+                data={
+                    "error": str(exc),
+                    "input": effective_query[:300],
+                    "description": "Classifier failed — could not extract service, severity, or incident type.",
+                },
             )
 
         is_incident_query = bool(
@@ -224,7 +284,11 @@ class IncidentOrchestrator:
                     agent="conversationalist",
                     step="natural_response",
                     status="error",
-                    data={"error": str(exc)},
+                    data={
+                        "error": str(exc),
+                        "input": query[:300],
+                        "description": "Conversationalist failed to generate a response for this off-topic query.",
+                    },
                 )
 
             yield StreamEvent(
@@ -285,7 +349,11 @@ class IncidentOrchestrator:
                 agent="entity_extractor",
                 step="entity_extraction",
                 status="error",
-                data={"error": str(exc)},
+                data={
+                    "error": str(exc),
+                    "input": f"Service: {state.service} | Type: {state.incident_type} | Query: {query[:200]}",
+                    "description": "Entity extraction failed — downstream graph and web queries may be impaired.",
+                },
             )
 
         if "repo_scout" in enabled_agents:
@@ -350,7 +418,11 @@ class IncidentOrchestrator:
                     agent="repo_scout",
                     step="repo_scouting",
                     status="error",
-                    data={"error": str(exc)},
+                    data={
+                        "error": str(exc),
+                        "input": f"{owner}/{repo}",
+                        "description": "Repo scouting failed — GitHub data unavailable for this turn.",
+                    },
                 )
         else:
             yield StreamEvent(
@@ -415,7 +487,11 @@ class IncidentOrchestrator:
                     agent="terraform_scout",
                     step="terraform_scouting",
                     status="error",
-                    data={"error": str(exc)},
+                    data={
+                        "error": str(exc),
+                        "input": f"Workspace: {state.service or 'default'}",
+                        "description": "Terraform scouting failed — IaC drift data unavailable for this turn.",
+                    },
                 )
         else:
             yield StreamEvent(
@@ -490,7 +566,11 @@ class IncidentOrchestrator:
                 agent="graph_analyzer",
                 step="graph_traversal",
                 status="error",
-                data={"error": str(exc)},
+                data={
+                    "error": str(exc),
+                    "input": f"Service: {state.service} | Entities: {state.entities.get('services', [])}",
+                    "description": "Neo4j graph traversal failed — blast radius and topology data unavailable.",
+                },
             )
 
         web_context = "No supplementary web intelligence available."
@@ -560,7 +640,11 @@ class IncidentOrchestrator:
                     agent="web_searcher",
                     step="web_search",
                     status="error",
-                    data={"error": str(exc)},
+                    data={
+                        "error": str(exc),
+                        "input": _ws_query,
+                        "description": "Web search failed — external signals unavailable for this turn.",
+                    },
                 )
         else:
             yield StreamEvent(
@@ -627,7 +711,11 @@ class IncidentOrchestrator:
                     agent="ops_analyst",
                     step="ops_diagnostics",
                     status="error",
-                    data={"error": str(exc)},
+                    data={
+                        "error": str(exc),
+                        "input": f"Service: {state.service}",
+                        "description": "Ops diagnostics failed — telemetry data unavailable for this turn.",
+                    },
                 )
         else:
             yield StreamEvent(
@@ -686,7 +774,11 @@ class IncidentOrchestrator:
                     agent="crew",
                     step="crew_enrichment",
                     status="error",
-                    data={"error": str(exc)},
+                    data={
+                        "error": str(exc),
+                        "input": f"Service: {state.service} | Type: {state.incident_type}",
+                        "description": "CrewAI enrichment failed — intelligence synthesis unavailable for this turn.",
+                    },
                 )
         else:
             yield StreamEvent(
@@ -749,7 +841,11 @@ class IncidentOrchestrator:
                 agent="root_cause_finder",
                 step="root_cause_analysis",
                 status="error",
-                data={"error": str(exc)},
+                data={
+                    "error": str(exc),
+                    "input": f"Service: {state.service} | Severity: {state.severity} | Type: {state.incident_type}",
+                    "description": "Root cause analysis failed — causal chain unavailable.",
+                },
             )
 
         yield StreamEvent(
@@ -802,7 +898,11 @@ class IncidentOrchestrator:
                 agent="remediator",
                 step="remediation",
                 status="error",
-                data={"error": str(exc)},
+                data={
+                    "error": str(exc),
+                    "input": f"Root cause: {state.root_cause or 'Unknown'} | Service: {state.service} | Severity: {state.severity}",
+                    "description": "Remediation planning failed — no action plan generated.",
+                },
             )
 
         yield StreamEvent(
@@ -882,7 +982,11 @@ class IncidentOrchestrator:
                 agent="conversationalist",
                 step="natural_response",
                 status="error",
-                data={"error": str(exc)},
+                data={
+                    "error": str(exc),
+                    "input": f"Root cause: {state.root_cause or 'unknown'} | Service: {state.service}",
+                    "description": "Conversationalist failed to synthesize the incident narrative.",
+                },
             )
 
         yield StreamEvent(
