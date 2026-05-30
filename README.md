@@ -1,5 +1,19 @@
 # ⚡ Ops-Pilot — AI-Powered SRE Incident Response Platform
 
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=next.js&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Neo4j](https://img.shields.io/badge/Neo4j-5-008CC1?style=for-the-badge&logo=neo4j&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-Multi--Agent-FF6B35?style=for-the-badge&logo=langchain&logoColor=white)
+![CrewAI](https://img.shields.io/badge/CrewAI-Intelligence-8B5CF6?style=for-the-badge&logo=robot&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-22D3EE?style=for-the-badge)
+![SSE](https://img.shields.io/badge/Streaming-SSE-00FF88?style=for-the-badge&logo=lightning&logoColor=black)
+![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
+
 Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response. A central orchestrator coordinates twelve specialist AI agents that classify incidents, traverse a service dependency knowledge graph, scan repositories and Terraform state, analyse telemetry, identify root causes, and generate actionable remediation plans — all streamed in real time to the operator via Server-Sent Events.
 
 ---
