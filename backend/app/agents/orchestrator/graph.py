@@ -204,6 +204,7 @@ class IncidentOrchestrator:
                 data={
                     **state.classification,
                     "description": "Incident classified — severity, service, and type identified for downstream agents.",
+                    "input": effective_query[:300],
                     "output": f"Service: {out.service} | Severity: {out.severity} | Type: {out.incident_type}",
                     "completed_steps": list(state.completed_steps),
                 },
@@ -234,6 +235,8 @@ class IncidentOrchestrator:
                 data={
                     "message": "Generating natural language response for off-topic query",
                     "description": "Query was not incident-related; conversationalist generates a direct chat response without running the full pipeline.",
+                    "input": query[:300],
+                    "steps": ["Detect off-topic intent", "Generate direct conversational reply", "Summarize for history"],
                 },
             )
             try:
@@ -256,7 +259,13 @@ class IncidentOrchestrator:
                     agent="conversationalist",
                     step="natural_response",
                     status="complete",
-                    data={"message": "Natural response ready"},
+                    data={
+                        "message": "Natural response ready",
+                        "description": "Conversational reply generated for off-topic query.",
+                        "input": query[:300],
+                        "output": conv_out.natural_response[:400] if conv_out.natural_response else "Response generated",
+                        "completed_steps": list(state.completed_steps),
+                    },
                 )
             except Exception as exc:
                 logger.error(f"[Orchestrator] Conversationalist (off-topic): {exc}")
@@ -512,6 +521,7 @@ class IncidentOrchestrator:
                 data={
                     **state.graph_context,
                     "description": "Graph traversal complete — service topology, blast radius, and ownership mapped.",
+                    "input": f"Service: {state.service} | Entities: {state.entities.get('services', [])}",
                     "output": f"Blast radius: {state.graph_context.get('blast_radius_count', 0)} nodes | Upstream: {len(state.graph_context.get('upstream_services', []))} | Downstream: {len(state.graph_context.get('downstream_services', []))}",
                     "completed_steps": list(state.completed_steps),
                 },
@@ -757,6 +767,7 @@ class IncidentOrchestrator:
                 data={
                     **out.model_dump(),
                     "description": "Root cause identified — causal chain and timeline reconstruction complete.",
+                    "input": f"Service: {state.service} | Severity: {state.severity} | Type: {state.incident_type}",
                     "output": out.primary_cause[:300],
                     "causal_chain_summary": [f.factor for f in out.causal_chain],
                     "completed_steps": list(state.completed_steps),
@@ -809,6 +820,7 @@ class IncidentOrchestrator:
                 data={
                     **out.model_dump(),
                     "description": "Remediation plan complete — immediate actions, rollback steps, and escalation paths generated.",
+                    "input": f"Root cause: {state.root_cause or 'Unknown'} | Service: {state.service} | Severity: {state.severity}",
                     "output": f"{len(state.remediation_steps)} immediate actions | {len(state.rollback_steps)} rollback steps",
                     "immediate_actions_summary": state.remediation_steps[:5],
                     "completed_steps": list(state.completed_steps),

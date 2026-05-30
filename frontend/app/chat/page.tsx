@@ -73,6 +73,7 @@ type ExplainabilityEvent = {
   rawData: Record<string, unknown> | null;
   inputHint: string | null;
   outputHint: string | null;
+  errorInfo: string | null;
 };
 
 const STORAGE_KEY = "ops_pilot_chat_sessions_v4";
@@ -601,16 +602,29 @@ function ExplainabilityModal({
       ? (ev.rawData.completed_steps as string[])
       : [];
 
+  const DEDICATED_KEYS = new Set([
+    "completed_steps",
+    "description",
+    "input",
+    "output",
+    "message",
+    "error",
+    "query",
+    "payload",
+    "primary_cause",
+    "root_cause",
+    "results_count",
+    "report_length",
+  ]);
+
   const rawEntries = ev.rawData
     ? Object.entries(ev.rawData).filter(
         ([k, v]) =>
-          k !== "completed_steps" &&
-          k !== "description" &&
-          k !== "input" &&
-          k !== "output" &&
+          !DEDICATED_KEYS.has(k) &&
           v !== null &&
           v !== undefined &&
-          v !== "",
+          v !== "" &&
+          !(Array.isArray(v) && v.length === 0),
       )
     : [];
 
@@ -697,17 +711,45 @@ function ExplainabilityModal({
             </span>
           </div>
 
-          {Boolean(ev.rawData?.description) && (
-            <p className="text-[11px] text-chrome-dim font-mono leading-relaxed mb-4 border-l-2 border-plasma/40 pl-3">
-              {String(ev.rawData?.description)}
-            </p>
+          {/* Agent description from timeline */}
+          {agentInfo && (
+            <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-surface-2 border border-border-1">
+              <agentInfo.icon size={13} style={{ color: agentInfo.color }} />
+              <p className="text-[11px] text-chrome-dim font-mono leading-relaxed">
+                {agentInfo.name} — {agentInfo.status}
+              </p>
+            </div>
+          )}
+
+          {/* What this step does — description from backend */}
+          {ev.detail && (
+            <div className="mb-4 border-l-2 border-plasma/40 pl-3">
+              <p className="text-[10px] text-plasma font-mono uppercase tracking-widest mb-1">
+                What this step does
+              </p>
+              <p className="text-[11px] text-chrome font-mono leading-relaxed whitespace-pre-wrap">
+                {ev.detail}
+              </p>
+            </div>
+          )}
+
+          {/* Error */}
+          {ev.errorInfo && (
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-3">
+              <p className="text-[11px] text-red-400 font-mono uppercase tracking-widest mb-2">
+                ⚠ Error
+              </p>
+              <p className="text-xs text-red-300 font-mono leading-relaxed whitespace-pre-wrap">
+                {ev.errorInfo}
+              </p>
+            </div>
           )}
 
           {/* Input */}
           {ev.inputHint && (
             <div className="bg-surface-2 border border-border-1 rounded-lg p-4 mb-3">
               <p className="text-[11px] text-chrome-dim font-mono uppercase tracking-widest mb-2">
-                Input
+                → Input
               </p>
               <p className="text-xs text-chrome font-mono leading-relaxed whitespace-pre-wrap">
                 {ev.inputHint}
@@ -717,9 +759,9 @@ function ExplainabilityModal({
 
           {/* Output */}
           {ev.outputHint && (
-            <div className="bg-surface-2 border border-border-1 rounded-lg p-4 mb-3">
+            <div className="bg-surface-2 border border-emerald-500/20 rounded-lg p-4 mb-3">
               <p className="text-[11px] text-emerald-400 font-mono uppercase tracking-widest mb-2">
-                Output
+                ← Output
               </p>
               <p className="text-xs text-chrome font-mono leading-relaxed whitespace-pre-wrap">
                 {ev.outputHint}
@@ -727,21 +769,11 @@ function ExplainabilityModal({
             </div>
           )}
 
-          {/* Operation Detail */}
-          <div className="bg-surface-2 border border-border-1 rounded-lg p-4 mb-3">
-            <p className="text-[11px] text-chrome-dim font-mono uppercase tracking-widest mb-2">
-              Operation Detail
-            </p>
-            <p className="text-xs text-chrome font-mono leading-relaxed whitespace-pre-wrap">
-              {ev.detail || "No detail available for this operation."}
-            </p>
-          </div>
-
           {/* Completed steps */}
           {completedSteps.length > 0 && (
             <div className="mb-3">
               <p className="text-[11px] text-emerald-400 font-mono uppercase tracking-widest mb-2">
-                Steps completed so far
+                Pipeline progress
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {completedSteps.map((s) => (
@@ -749,20 +781,20 @@ function ExplainabilityModal({
                     key={s}
                     className="px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-[10px] font-mono text-emerald-400"
                   >
-                    {s}
+                    ✓ {s}
                   </span>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Raw agent data */}
+          {/* Raw agent data — collapsible, filtered to interesting keys */}
           {rawEntries.length > 0 && (
             <details className="mb-3">
               <summary className="cursor-pointer text-[11px] font-mono text-chrome-dim hover:text-plasma list-none mb-2">
                 <span className="text-plasma">&#9658;</span> Raw agent data
               </summary>
-              <div className="bg-surface-2 border border-border-1 rounded-lg p-3 space-y-2 max-h-64 overflow-y-auto mt-2">
+              <div className="bg-surface-2 border border-border-1 rounded-lg p-3 space-y-2 max-h-72 overflow-y-auto mt-2">
                 {rawEntries.map(([key, value]) => (
                   <div
                     key={key}
@@ -771,32 +803,25 @@ function ExplainabilityModal({
                     <p className="text-[10px] font-mono text-chrome-dim uppercase tracking-wider mb-0.5">
                       {key.replace(/_/g, " ")}
                     </p>
-                    <p className="text-[11px] font-mono text-chrome leading-relaxed break-words">
+                    <p className="text-[11px] font-mono text-chrome leading-relaxed break-words whitespace-pre-wrap">
                       {Array.isArray(value)
                         ? value.length === 0
                           ? "—"
                           : value
                               .map((item, i) =>
                                 typeof item === "object"
-                                  ? `${i + 1}. ${JSON.stringify(item).slice(0, 120)}`
+                                  ? `${i + 1}. ${JSON.stringify(item, null, 2).slice(0, 200)}`
                                   : `${i + 1}. ${String(item)}`,
                               )
                               .join("\n")
-                        : typeof value === "object"
-                          ? JSON.stringify(value, null, 2).slice(0, 400)
-                          : String(value).slice(0, 300)}
+                        : typeof value === "object" && value !== null
+                          ? JSON.stringify(value, null, 2).slice(0, 600)
+                          : String(value).slice(0, 400)}
                     </p>
                   </div>
                 ))}
               </div>
             </details>
-          )}
-
-          {/* Agent description */}
-          {agentInfo && (
-            <p className="text-[11px] text-chrome-dim font-mono mt-2">
-              {agentInfo.name} — {agentInfo.status}
-            </p>
           )}
         </motion.div>
       </motion.div>
@@ -1185,41 +1210,39 @@ export default function ChatPage() {
         ? (event.data as Record<string, unknown>)
         : null;
 
-    // Prefer explicit "input" field from backend, then fall back to known fields
-    const inputHint: string | null = raw
-      ? String(
-          (raw.input as string | undefined) ??
-            (raw.message as string | undefined) ??
-            (raw.query as string | undefined) ??
-            (raw.payload as string | undefined) ??
-            "",
-        ).slice(0, 400) || null
+    const rawInput = raw?.input ?? raw?.query ?? raw?.payload ?? null;
+    const inputHint: string | null = rawInput
+      ? String(rawInput).slice(0, 600) || null
       : null;
 
-    // Prefer explicit "output" field from backend, then fall back to known fields
-    const outputHint: string | null = raw
-      ? ((
-          (raw.output as string | undefined) ??
-          (raw.primary_cause as string | undefined) ??
-          (raw.root_cause as string | undefined) ??
-          (raw.results_count !== undefined
-            ? `Found ${raw.results_count} results`
-            : undefined) ??
-          (raw.report_length !== undefined
-            ? `Report length: ${raw.report_length} chars`
-            : undefined)
-        )
-          ?.toString()
-          .slice(0, 400) ?? null)
+    const rawOutput =
+      raw?.output ??
+      raw?.primary_cause ??
+      raw?.root_cause ??
+      (raw?.results_count !== undefined
+        ? `Found ${raw.results_count} result(s)`
+        : undefined) ??
+      (raw?.report_length !== undefined
+        ? `Report length: ${raw.report_length} chars`
+        : undefined) ??
+      null;
+    const outputHint: string | null = rawOutput
+      ? String(rawOutput).slice(0, 600) || null
       : null;
 
     const detail = String(
-      event.detail ??
-        (raw ? (raw.message ?? raw.output ?? raw.error) : null) ??
+      (raw?.description as string | undefined) ??
+        (raw?.message as string | undefined) ??
+        (raw?.error as string | undefined) ??
+        event.detail ??
         event.message ??
         event.result ??
         "Step updated",
-    ).slice(0, 400);
+    ).slice(0, 600);
+
+    const errorInfo: string | null = raw?.error
+      ? String(raw.error).slice(0, 400)
+      : null;
 
     setExplainabilityEvents((prev: ExplainabilityEvent[]) => [
       ...prev,
@@ -1232,6 +1255,7 @@ export default function ChatPage() {
         rawData: raw,
         inputHint,
         outputHint,
+        errorInfo,
       },
     ]);
   }
