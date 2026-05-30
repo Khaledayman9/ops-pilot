@@ -1,0 +1,10 @@
+# perl-base CVE-2026-42496 - essential Debian package, no fix available as of 2026-05-30
+# Cannot be removed from python:3.11-slim without breaking the base image
+CVE-2026-42496
+
+# perl-base CVE-2026-8376 - same reason as above
+CVE-2026-8376
+
+# chromadb CVE-2026-45829 - no patched version available as of 2026-05-30
+# Monitor: https://avd.aquasec.com/nvd/cve-2026-45829
+CVE-2026-45829
