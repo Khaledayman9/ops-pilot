@@ -18,7 +18,7 @@ from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
 from ..terraform_scouter import TerraformScoutAgent, TerraformScoutInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
-from .utils import build_analysis_context, compact_history
+from .utils import build_analysis_context, compact_history, form_orchestrator_output
 
 DEFAULT_ENABLED_AGENTS = {
     "orchestrator",
@@ -989,7 +989,7 @@ class IncidentOrchestrator:
                     "description": "Conversationalist failed to synthesize the incident narrative.",
                 },
             )
-
+        output = form_orchestrator_output(state)
         yield StreamEvent(
             event="result",
             agent="orchestrator",
@@ -1032,5 +1032,8 @@ class IncidentOrchestrator:
                 "web_citations": state.web_citations,
                 "completed_steps": state.completed_steps,
                 "errors": state.errors,
+                "input": query[:300],
+                "output": output,
+                "description": "Ochestration finished the flow successfully.",
             },
         )

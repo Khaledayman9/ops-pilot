@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from ..conversationalist.models import ChatTurn
 from .models import IncidentState
@@ -71,3 +72,79 @@ def compact_history(raw_history: list[dict]) -> list[ChatTurn]:
         turns.append(ChatTurn(role=role, content=content))
 
     return turns[-_MAX_HISTORY_TURNS:]
+
+
+def _safe_str(value: Any) -> str:
+    """Convert any value into a safe string representation."""
+    if value is None:
+        return ""
+    if isinstance(value, (str, int, float, bool)):
+        return str(value)
+    return str(value)
+
+
+def _safe_join(value: Any) -> str:
+    """Safely join lists/tuples or fallback to string."""
+    if not value:
+        return ""
+    if isinstance(value, (list, tuple, set)):
+        return ", ".join(_safe_str(v) for v in value if v is not None)
+    return _safe_str(value)
+
+
+def form_orchestrator_output(state: "IncidentState") -> str:
+    parts = ["Orchestration Done"]
+
+    fields = {
+        "Session": state.session_id,
+        "Incident Relevant": state.is_incident_relevant,
+        "Classification": state.classification,
+        "Severity": state.severity,
+        "Service": state.service,
+        "Root Cause": state.root_cause,
+        "Causal Chain": state.causal_chain,
+        "Conversation Summary": state.conversation_summary,
+        "Natural Response": state.natural_response,
+        "Document Context Chars": state.document_context_chars,
+        "Repo Scout": state.repo_scout_summary,
+        "Terraform Scout": state.terraform_scout_summary,
+        "Ops Diagnostics": state.ops_analyst_result,
+        "Remediation Steps": state.remediation_steps,
+        "Rollback Steps": state.rollback_steps,
+        "Escalation Paths": state.escalation_paths,
+        "Runbooks": state.runbook_references,
+        "Timeline": state.timeline,
+        "Web Citations": state.web_citations,
+        "Completed Steps": state.completed_steps,
+        "Errors": state.errors,
+    }
+
+    for label, value in fields.items():
+        if value in (None, "", [], {}, ()):
+            continue
+
+        formatted = _safe_join(value)
+
+        if formatted:
+            parts.append(f"{label}: {formatted}")
+        else:
+            parts.append(f"{label}: {_safe_str(value)}")
+
+    graph = state.graph_context or {}
+
+    blast_count = graph.get("blast_radius_count")
+    upstream = graph.get("upstream_services")
+    downstream = graph.get("downstream_services")
+
+    if blast_count not in (None, 0, "", []):
+        parts.append(f"Blast Radius: {blast_count}")
+
+    upstream_joined = _safe_join(upstream)
+    if upstream_joined:
+        parts.append(f"Upstream: {upstream_joined}")
+
+    downstream_joined = _safe_join(downstream)
+    if downstream_joined:
+        parts.append(f"Downstream: {downstream_joined}")
+
+    return "\n".join(parts)
