@@ -16,7 +16,6 @@
 
 Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response. A central orchestrator coordinates twelve specialist AI agents that classify incidents, traverse a service dependency knowledge graph, scan repositories and Terraform state, analyse telemetry, identify root causes, and generate actionable remediation plans — all streamed in real time to the operator via Server-Sent Events.
 
-
 <img width="1918" height="921" alt="Opspilot 1" src="https://github.com/user-attachments/assets/a13e19cd-2e8f-4b64-8b00-ea41c9cd17a7" />
 
 <img width="1914" height="912" alt="Opspilot 0" src="https://github.com/user-attachments/assets/a07f18cb-3499-4499-942b-5d70b290f8b5" />
@@ -25,7 +24,7 @@ Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response
 
 ## Table of Contents
 
-- [Layout][#layout]
+- [Layout](#layout)
 - [Architecture Overview](#architecture-overview)
 - [Tech Stack](#tech-stack)
 - [Agent Pipeline](#agent-pipeline)

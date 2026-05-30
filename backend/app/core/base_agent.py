@@ -82,7 +82,7 @@ class BaseAgent(abc.ABC):
         """
         return self.llm.with_structured_output(output_schema, method="function_calling")
 
-    # Logging───────────
+    # Logging
     def _log(self, msg: str, level: str = "info") -> None:
         fn = getattr(logger, level, logger.info)
         fn(f"[{self.agent_name}] {msg}")
