@@ -4,6 +4,34 @@ Next.js 15 · TypeScript · Tailwind CSS · Framer Motion · anime.js · Jest
 
 ---
 
+## Features
+
+### Chat & Incident Analysis
+
+- Multi-turn incident analysis chat with full message history persisted per session in `localStorage`
+- Starter prompts for common incident patterns
+- File upload support (PDF, DOCX, PPTX, XLSX, CSV, Markdown, HTML, TXT) — converted to markdown by the Document Processor agent and sent in the same turn
+
+### Cancel Mid-Run
+
+- The **Analyze** button becomes a red **Cancel** button while a pipeline is running
+- Clicking Cancel immediately closes the SSE connection, halts event delivery, and replaces the in-progress assistant placeholder with `⚠ Analysis cancelled.`
+- No backend changes are required — the broken SSE pipe causes the backend async generator to stop naturally after its current step
+
+### Explainability Panel
+
+- Every agent step streamed from the backend is recorded as an explainability event card
+- Hover over a card for a quick tooltip preview; click to open a full detail modal showing status, description, input, output, errors, completed pipeline steps, and raw agent data
+- **Explainability events are persisted per chat session** in `localStorage` — switching sessions in the history sidebar instantly restores that session's last explainability state
+- Old sessions that predate this field are migrated automatically on load
+
+### Session History
+
+- Unlimited named sessions stored locally; sessions can be created, switched, and deleted
+- Each session independently stores its messages and latest explainability block
+
+---
+
 ## Table of Contents
 
 - [Overview](#overview)
