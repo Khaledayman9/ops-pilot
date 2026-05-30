@@ -5,8 +5,6 @@ ARG GID=10001
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
-    && apt-get remove -y perl-base \
-    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install uv --no-cache-dir
