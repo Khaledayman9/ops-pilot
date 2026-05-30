@@ -1,4 +1,4 @@
-<img width="1915" height="919" alt="Opspilot 10" src="https://github.com/user-attachments/assets/aa2242aa-08e8-4c6c-bb8a-bd627740bad4" /># ⚡ Ops-Pilot — AI-Powered SRE Incident Response Platform
+# ⚡ Ops-Pilot — AI-Powered SRE Incident Response Platform
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=next.js&logoColor=white)
@@ -15,6 +15,7 @@
 ![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?style=for-the-badge&logo=github-actions&logoColor=white)
 
 Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response. A central orchestrator coordinates twelve specialist AI agents that classify incidents, traverse a service dependency knowledge graph, scan repositories and Terraform state, analyse telemetry, identify root causes, and generate actionable remediation plans — all streamed in real time to the operator via Server-Sent Events.
+
 
 <img width="1918" height="921" alt="Opspilot 1" src="https://github.com/user-attachments/assets/a13e19cd-2e8f-4b64-8b00-ea41c9cd17a7" />
 
@@ -43,38 +44,54 @@ Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response
 - [Testing](#testing)
 - [CI/CD](#cicd)
 
-
+---
 
 ## Layout
 
- - <details><summary>Home Page </summary>
-     - Dark Mode (Default:
-       <img width="1918" height="921" alt="Opspilot 1" src="https://github.com/user-attachments/assets/1765f1e8-2a50-4168-921b-4a3e2843c669" />
-     - Light Mode:
+<details>
+<summary>Home Page</summary>
+
+**Dark Mode (Default):**
+
+<img width="1918" height="921" alt="Opspilot 1" src="https://github.com/user-attachments/assets/1765f1e8-2a50-4168-921b-4a3e2843c669" />
+
+**Light Mode:**
+
 <img width="1915" height="917" alt="Opspilot 2" src="https://github.com/user-attachments/assets/9d837dae-72cc-4309-9bf6-69f8dadd69f1" />
-      </details>
 
- - <details><summary>Settings</summary>
+</details>
 
-  <img width="1919" height="917" alt="Opspilot 3" src="https://github.com/user-attachments/assets/51979de9-449c-400e-b9c2-7e576715fcf2" />
-  
- </details>
+<details>
+<summary>Settings</summary>
 
-  - <details><summary>Chat Interface</summary>
+<img width="1919" height="917" alt="Opspilot 3" src="https://github.com/user-attachments/assets/51979de9-449c-400e-b9c2-7e576715fcf2" />
+
+</details>
+
+<details>
+<summary>Chat Interface</summary>
+
+**Chat window:**
+
 <img width="1917" height="915" alt="Opspilot 4" src="https://github.com/user-attachments/assets/cb8d7e47-cac8-40ca-a6f6-9a4b68c24392" />
 
-  <img width="1911" height="918" alt="Flow New" src="https://github.com/user-attachments/assets/fd3d4e0e-2828-41d7-80b6-89197ad70704" />
+**Query:**
 
-  <img width="1916" height="910" alt="Explanability" src="https://github.com/user-attachments/assets/97ea5c10-dd48-44cd-bcf5-204dad9126b2" />
+<img width="1911" height="918" alt="Flow New" src="https://github.com/user-attachments/assets/fd3d4e0e-2828-41d7-80b6-89197ad70704" />
 
-<img width="1918" height="903" alt="Cancel" src="https://github.com/user-attachments/assets/7c0863be-931d-43d6-bf69-98d7a82824ac" />
+**Explainability Panel:**
+
+<img width="1916" height="910" alt="Explainability" src="https://github.com/user-attachments/assets/97ea5c10-dd48-44cd-bcf5-204dad9126b2" />
 
 <img width="1921" height="910" alt="Opspilot 9" src="https://github.com/user-attachments/assets/5758e418-46db-4d2e-b937-eef469642091" />
 
 <img width="1915" height="919" alt="Opspilot 10" src="https://github.com/user-attachments/assets/dc6b3fa0-9bda-4ba0-a098-1f697d523cc8" />
 
- </details>
+**Cancel Operation:**
 
+<img width="1918" height="903" alt="Cancel" src="https://github.com/user-attachments/assets/7c0863be-931d-43d6-bf69-98d7a82824ac" />
+
+</details>
 
 ---
 
