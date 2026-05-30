@@ -152,7 +152,10 @@ class IncidentOrchestrator:
             status="running",
             data={
                 "message": "Starting orchestrator turn",
+                "description": "Routes the incoming query through the full multi-agent pipeline, deciding which agents to invoke based on enabled config.",
+                "input": query[:300],
                 "enabled_agents": sorted(enabled_agents),
+                "output": f"Pipeline starting with {len(enabled_agents)} agents enabled",
             },
         )
 
@@ -165,7 +168,11 @@ class IncidentOrchestrator:
                 status="complete",
                 data={
                     "message": "Document markdown attached to this orchestration turn",
+                    "description": "Converts uploaded files (PDF, DOCX, etc.) to markdown and injects them into the pipeline context for all downstream agents.",
+                    "input": f"User query + document context",
+                    "output": f"Attached {state.document_context_chars} chars of document markdown to pipeline",
                     "characters": state.document_context_chars,
+                    "completed_steps": list(state.completed_steps),
                 },
             )
 
@@ -174,7 +181,11 @@ class IncidentOrchestrator:
             agent="classifier",
             step="classify",
             status="running",
-            data={"message": "Classifying incident"},
+            data={
+                "message": "Classifying incident",
+                "description": "Uses an LLM to extract service name, severity (P0-P3), incident type, affected components, and confidence score from the raw query.",
+                "input": effective_query[:300],
+            },
         )
         try:
             out = await self._classifier.run(ClassificationInput(query=effective_query))
@@ -190,7 +201,12 @@ class IncidentOrchestrator:
                 agent="classifier",
                 step="classify",
                 status="complete",
-                data=state.classification,
+                data={
+                    **state.classification,
+                    "description": "Incident classified — severity, service, and type identified for downstream agents.",
+                    "output": f"Service: {out.service} | Severity: {out.severity} | Type: {out.incident_type}",
+                    "completed_steps": list(state.completed_steps),
+                },
             )
         except Exception as exc:
             logger.error(f"[Orchestrator] Classifier: {exc}")
@@ -215,7 +231,10 @@ class IncidentOrchestrator:
                 agent="conversationalist",
                 step="natural_response",
                 status="running",
-                data={"message": "Generating natural language response for off-topic query"},
+                data={
+                    "message": "Generating natural language response for off-topic query",
+                    "description": "Query was not incident-related; conversationalist generates a direct chat response without running the full pipeline.",
+                },
             )
             try:
                 conv_out = await self._conversationalist.run(
@@ -276,7 +295,11 @@ class IncidentOrchestrator:
             agent="entity_extractor",
             step="entity_extraction",
             status="running",
-            data={"message": "Extracting entities"},
+            data={
+                "message": "Extracting entities",
+                "description": "Parses the query to extract structured entities: services, deployments, metrics, error codes, time ranges, and search keywords for downstream graph and web queries.",
+                "input": f"Service: {state.service} | Type: {state.incident_type} | Query: {query[:200]}",
+            },
         )
         try:
             out = await self._extractor.run(
@@ -293,7 +316,13 @@ class IncidentOrchestrator:
                 agent="entity_extractor",
                 step="entity_extraction",
                 status="complete",
-                data=state.entities,
+                data={
+                    **state.entities,
+                    "description": "Entities extracted and structured for graph traversal and web search.",
+                    "output": out.context_summary[:300],
+                    "search_queries": out.search_queries,
+                    "completed_steps": list(state.completed_steps),
+                },
             )
         except Exception as exc:
             logger.error(f"[Orchestrator] EntityExtractor: {exc}")
@@ -312,7 +341,12 @@ class IncidentOrchestrator:
                 agent="repo_scout",
                 step="repo_scouting",
                 status="running",
-                data={"message": "Scouting GitHub repository for recent activity"},
+                data={
+                    "message": "Scouting GitHub repository for recent activity",
+                    "description": "Scans the GitHub repo associated with the affected service for recent commits, open PRs, and failing CI checks that may correlate with the incident.",
+                    "input": f"Service: {state.service} | Incident type: {state.incident_type}",
+                    "steps": ["Resolve owner/repo from service name", "Fetch recent commits", "Check open PRs", "Check failing CI checks", "Summarize findings"],
+                },
             )
             try:
                 service_slug = (state.service or "unknown").replace(" ", "-").lower()
@@ -340,7 +374,14 @@ class IncidentOrchestrator:
                     agent="repo_scout",
                     step="repo_scouting",
                     status="complete",
-                    data={"summary": scout_out.summary[:500], "tools_used": scout_out.tools_used},
+                    data={
+                        "description": "Repository scan complete — recent code changes and CI status collected.",
+                        "input": f"{owner}/{repo}",
+                        "output": scout_out.summary[:400],
+                        "summary": scout_out.summary[:500],
+                        "tools_used": scout_out.tools_used,
+                        "completed_steps": list(state.completed_steps),
+                    },
                 )
             except Exception as exc:
                 logger.warning(f"[Orchestrator] RepoScout: {exc} - continuing without GitHub data")
@@ -367,7 +408,12 @@ class IncidentOrchestrator:
                 agent="terraform_scout",
                 step="terraform_scouting",
                 status="running",
-                data={"message": "Inspecting Terraform/IaC context"},
+                data={
+                    "message": "Inspecting Terraform/IaC context",
+                    "description": "Checks Terraform workspace state for recent plan/apply runs and infrastructure drift that may have caused or contributed to the incident.",
+                    "input": f"Workspace: {state.service or 'default'} | Query: {query[:150]}",
+                    "steps": ["Load workspace state", "Detect recent plan/apply runs", "Identify drift", "Correlate with incident", "Summarize IaC findings"],
+                },
             )
             try:
                 terraform_out = await self._terraform_scout.run(
@@ -386,8 +432,12 @@ class IncidentOrchestrator:
                     step="terraform_scouting",
                     status="complete",
                     data={
+                        "description": "IaC inspection complete — infrastructure drift and recent applies recorded.",
+                        "input": f"Workspace: {state.service or 'default'}",
+                        "output": terraform_out.summary[:400],
                         "summary": terraform_out.summary[:500],
                         "tools_used": terraform_out.tools_used,
+                        "completed_steps": list(state.completed_steps),
                     },
                 )
             except Exception as exc:
@@ -418,8 +468,18 @@ class IncidentOrchestrator:
             status="running",
             data={
                 "message": "Preparing graph traversal queries",
-                "operation": "Neo4j dependency, upstream, blast radius, deployments, incidents, runbooks, ownership, config changes",
-                "query": "MATCH service/dependency/deployment/incident/runbook ownership patterns for affected service",
+                "description": "Plans the set of Cypher queries to execute against the Neo4j service dependency graph to map blast radius, ownership, and related incidents.",
+                "input": f"Service: {state.service} | Entities: {state.entities.get('services', [])}",
+                "steps": [
+                    "MATCH upstream dependencies",
+                    "MATCH downstream blast radius",
+                    "MATCH recent deployments",
+                    "MATCH open incidents",
+                    "MATCH runbook references",
+                    "MATCH ownership records",
+                    "MATCH config changes",
+                ],
+                "output": f"Querying Neo4j for service '{state.service}' dependency graph",
             },
         )
 
@@ -428,7 +488,11 @@ class IncidentOrchestrator:
             agent="graph_analyzer",
             step="graph_traversal",
             status="running",
-            data={"message": "Running Neo4j graph traversal"},
+            data={
+                "message": "Running Neo4j graph traversal",
+                "description": "Executes Cypher queries against Neo4j to find upstream/downstream services, blast radius, recent deployments, runbooks, and ownership for the affected service.",
+                "input": f"Service: {state.service} | Incident type: {state.incident_type}",
+            },
         )
         try:
             out = await self._graph.run(
@@ -445,7 +509,12 @@ class IncidentOrchestrator:
                 agent="graph_analyzer",
                 step="graph_traversal",
                 status="complete",
-                data=state.graph_context,
+                data={
+                    **state.graph_context,
+                    "description": "Graph traversal complete — service topology, blast radius, and ownership mapped.",
+                    "output": f"Blast radius: {state.graph_context.get('blast_radius_count', 0)} nodes | Upstream: {len(state.graph_context.get('upstream_services', []))} | Downstream: {len(state.graph_context.get('downstream_services', []))}",
+                    "completed_steps": list(state.completed_steps),
+                },
             )
         except Exception as exc:
             logger.error(f"[Orchestrator] GraphAnalyzer: {exc}")
@@ -473,16 +542,26 @@ class IncidentOrchestrator:
             web_context = f"{web_context}\n\n=== Terraform Scout Evidence ===\n{state.terraform_scout_summary}"
 
         if "web_searcher" in enabled_agents:
+            _ws_query = f"{state.service} {state.incident_type} incident"
             yield StreamEvent(
                 event="step",
                 agent="web_searcher",
                 step="web_search",
                 status="running",
-                data={"message": "Searching web for known issues"},
+                data={
+                    "message": "Searching web for known issues",
+                    "description": "Runs DuckDuckGo searches for known issues, post-mortems, and bug reports related to the affected service and incident type to enrich analysis context.",
+                    "input": _ws_query,
+                    "queries": [
+                        _ws_query,
+                        f"{state.service} {state.incident_type} bug",
+                        f"{state.service} incident post-mortem",
+                    ],
+                },
             )
             try:
                 web_out = await self._web_searcher.run(
-                    WebSearchInput(query=f"{state.service} {state.incident_type} incident"),
+                    WebSearchInput(query=_ws_query),
                     service=state.service or "unknown",
                     incident_type=state.incident_type or "unknown",
                     deployment_version=state.deployment_version,
@@ -498,9 +577,13 @@ class IncidentOrchestrator:
                     step="web_search",
                     status="complete",
                     data={
+                        "description": "Web search complete — external signals and known issues collected.",
+                        "input": _ws_query,
+                        "queries_used": web_out.queries_used,
                         "results_count": len(web_out.results),
-                        "context": web_context[:400],
-                        "citations": state.web_citations,
+                        "output": f"Found {len(web_out.results)} results. Top: {web_out.results[0].title if web_out.results else 'none'}",
+                        "citations": state.web_citations[:5],
+                        "completed_steps": list(state.completed_steps),
                     },
                 )
             except Exception as exc:
@@ -528,7 +611,12 @@ class IncidentOrchestrator:
                 agent="ops_analyst",
                 step="ops_diagnostics",
                 status="running",
-                data={"message": "Running operational diagnostics"},
+                data={
+                    "message": "Running operational diagnostics",
+                    "description": "Queries observability tools (metrics, traces, logs) to detect error rate spikes, latency anomalies, and saturation signals for the affected service.",
+                    "input": f"Service: {state.service} | Query: {query[:200]}",
+                    "steps": ["Query metrics store", "Check error rates", "Check latency percentiles", "Check saturation signals", "Summarize telemetry findings"],
+                },
             )
             try:
                 analyst_out = await self._ops_analyst.run(
@@ -548,7 +636,14 @@ class IncidentOrchestrator:
                     agent="ops_analyst",
                     step="ops_diagnostics",
                     status="complete",
-                    data={"result": analyst_out.result[:500], "tools_used": analyst_out.tools_used},
+                    data={
+                        "description": "Telemetry diagnostics complete — error rates, latency, and saturation signals recorded.",
+                        "input": f"Service: {state.service}",
+                        "output": analyst_out.result[:400] if analyst_out.result else "No telemetry anomalies detected",
+                        "result": analyst_out.result[:500],
+                        "tools_used": analyst_out.tools_used,
+                        "completed_steps": list(state.completed_steps),
+                    },
                 )
             except Exception as exc:
                 logger.warning(f"[Orchestrator] OpsAnalyst: {exc} - continuing without diagnostics")
@@ -575,7 +670,12 @@ class IncidentOrchestrator:
                 agent="crew",
                 step="crew_enrichment",
                 status="running",
-                data={"message": "Running CrewAI intelligence crew"},
+                data={
+                    "message": "Running CrewAI intelligence crew",
+                    "description": "Runs a multi-agent CrewAI crew (Researcher → Analyst → Writer) to gather, correlate, and synthesize external intelligence about the incident.",
+                    "input": f"Service: {state.service} | Type: {state.incident_type} | Query: {query[:150]}",
+                    "steps": ["Researcher agent: gather known issues", "Analyst agent: correlate signals", "Writer agent: synthesize intelligence report"],
+                },
             )
             try:
                 crew_report = await self._crew.run(
@@ -592,7 +692,13 @@ class IncidentOrchestrator:
                     agent="crew",
                     step="crew_enrichment",
                     status="complete",
-                    data={"report_length": len(crew_report)},
+                    data={
+                        "description": "CrewAI intelligence report synthesized and added to analysis context.",
+                        "input": f"Service: {state.service} | Type: {state.incident_type}",
+                        "output": crew_report[:400] if crew_report else "No crew report generated",
+                        "report_length": len(crew_report),
+                        "completed_steps": list(state.completed_steps),
+                    },
                 )
             except Exception as exc:
                 logger.warning(f"[Orchestrator] Crew: {exc}")
@@ -618,7 +724,12 @@ class IncidentOrchestrator:
             agent="root_cause_finder",
             step="root_cause_analysis",
             status="running",
-            data={"message": "Running root cause analysis"},
+            data={
+                "message": "Running root cause analysis",
+                "description": "Uses an LLM with full pipeline context (graph, web, telemetry, repo) to identify the primary root cause, build a causal chain, and reconstruct the incident timeline.",
+                "input": f"Service: {state.service} | Severity: {state.severity} | Type: {state.incident_type}",
+                "graph_nodes": state.graph_context.get("blast_radius_count", 0),
+            },
         )
         try:
             out = await self._root_cause.run(
@@ -643,7 +754,13 @@ class IncidentOrchestrator:
                 agent="root_cause_finder",
                 step="root_cause_analysis",
                 status="complete",
-                data=out.model_dump(),
+                data={
+                    **out.model_dump(),
+                    "description": "Root cause identified — causal chain and timeline reconstruction complete.",
+                    "output": out.primary_cause[:300],
+                    "causal_chain_summary": [f.factor for f in out.causal_chain],
+                    "completed_steps": list(state.completed_steps),
+                },
             )
         except Exception as exc:
             logger.error(f"[Orchestrator] RootCauseFinder: {exc}")
@@ -661,7 +778,11 @@ class IncidentOrchestrator:
             agent="remediator",
             step="remediation",
             status="running",
-            data={"message": "Generating remediation plan"},
+            data={
+                "message": "Generating remediation plan",
+                "description": "Generates an actionable remediation plan including immediate actions, rollback steps, escalation paths, and runbook references based on the identified root cause.",
+                "input": f"Root cause: {state.root_cause or 'Unknown'} | Service: {state.service} | Severity: {state.severity}",
+            },
         )
         try:
             out = await self._remediator.run(
@@ -685,7 +806,13 @@ class IncidentOrchestrator:
                 agent="remediator",
                 step="remediation",
                 status="complete",
-                data=out.model_dump(),
+                data={
+                    **out.model_dump(),
+                    "description": "Remediation plan complete — immediate actions, rollback steps, and escalation paths generated.",
+                    "output": f"{len(state.remediation_steps)} immediate actions | {len(state.rollback_steps)} rollback steps",
+                    "immediate_actions_summary": state.remediation_steps[:5],
+                    "completed_steps": list(state.completed_steps),
+                },
             )
         except Exception as exc:
             logger.error(f"[Orchestrator] Remediator: {exc}")
@@ -703,7 +830,12 @@ class IncidentOrchestrator:
             agent="conversationalist",
             step="natural_response",
             status="running",
-            data={"message": "Generating natural language explanation"},
+            data={
+                "message": "Generating natural language explanation",
+                "description": "Synthesizes all pipeline outputs into a coherent, human-readable incident narrative using an LLM, including citations and a conversation summary for history.",
+                "input": f"Root cause: {state.root_cause or 'unknown'} | Remediation steps: {len(state.remediation_steps)} | Service: {state.service}",
+                "steps": ["Synthesize pipeline outputs", "Generate human-readable narrative", "Include citations", "Summarize for history"],
+            },
         )
 
         incident_structured = {
@@ -746,7 +878,13 @@ class IncidentOrchestrator:
                 agent="conversationalist",
                 step="natural_response",
                 status="complete",
-                data={"message": "Natural response generated"},
+                data={
+                    "description": "Natural language narrative generated and ready to display.",
+                    "input": f"Root cause: {state.root_cause or 'unknown'} | Service: {state.service}",
+                    "output": state.natural_response[:400] if state.natural_response else "Response generated",
+                    "message": "Natural response generated",
+                    "completed_steps": list(state.completed_steps),
+                },
             )
         except Exception as exc:
             logger.error(f"[Orchestrator] Conversationalist: {exc}")

@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import {
@@ -69,6 +70,9 @@ type ExplainabilityEvent = {
   step: string;
   status: string;
   detail: string;
+  rawData: Record<string, unknown> | null;
+  inputHint: string | null;
+  outputHint: string | null;
 };
 
 const STORAGE_KEY = "ops_pilot_chat_sessions_v4";
@@ -575,13 +579,13 @@ function HistoryPanel({
 
 /** Full-screen modal for a single explainability event */
 function ExplainabilityModal({
-  event,
+  event: ev,
   onClose,
 }: {
   event: ExplainabilityEvent;
   onClose: () => void;
 }) {
-  const agentInfo = agentTimeline.find((a) => a.key === event.agent);
+  const agentInfo = agentTimeline.find((a) => a.key === ev.agent);
 
   // Close on Escape
   useEffect(() => {
@@ -591,6 +595,24 @@ function ExplainabilityModal({
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  const completedSteps: string[] =
+    ev.rawData && Array.isArray(ev.rawData.completed_steps)
+      ? (ev.rawData.completed_steps as string[])
+      : [];
+
+  const rawEntries = ev.rawData
+    ? Object.entries(ev.rawData).filter(
+        ([k, v]) =>
+          k !== "completed_steps" &&
+          k !== "description" &&
+          k !== "input" &&
+          k !== "output" &&
+          v !== null &&
+          v !== undefined &&
+          v !== "",
+      )
+    : [];
 
   return (
     <AnimatePresence>
@@ -609,7 +631,7 @@ function ExplainabilityModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.92, y: 12 }}
           transition={{ type: "spring", stiffness: 320, damping: 26 }}
-          className="relative bg-surface-1 border border-border-2 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl"
+          className="relative bg-surface-1 border border-border-2 rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl max-h-[85vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}
@@ -627,7 +649,7 @@ function ExplainabilityModal({
             <div
               className="w-10 h-10 rounded-lg border border-border-2 bg-surface-2 flex items-center justify-center"
               style={{
-                boxShadow: `0 0 12px 0 ${statusGlowColor(event.status)}`,
+                boxShadow: `0 0 12px 0 ${statusGlowColor(ev.status)}`,
               }}
             >
               {agentInfo ? (
@@ -638,11 +660,9 @@ function ExplainabilityModal({
             </div>
             <div>
               <p className="text-xs font-mono text-chrome-dim uppercase tracking-widest">
-                {event.agent}
+                {ev.agent}
               </p>
-              <p className="text-sm font-bold text-chrome mt-0.5">
-                {event.step}
-              </p>
+              <p className="text-sm font-bold text-chrome mt-0.5">{ev.step}</p>
             </div>
           </div>
 
@@ -653,43 +673,128 @@ function ExplainabilityModal({
               animate={{
                 scale: [1, 1.4, 1],
                 boxShadow: [
-                  `0 0 0 0 ${statusGlowColor(event.status)}`,
+                  `0 0 0 0 ${statusGlowColor(ev.status)}`,
                   "0 0 0 6px transparent",
                   "0 0 0 0 transparent",
                 ],
               }}
               transition={{ duration: 1.2, repeat: 2 }}
-              className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
+              className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(ev.status)}`}
             />
             <span className="text-xs font-mono text-chrome-dim">
               Status:{" "}
               <span
                 className={
-                  isSuccessStatus(event.status)
+                  isSuccessStatus(ev.status)
                     ? "text-emerald-400"
-                    : isErrorStatus(event.status)
+                    : isErrorStatus(ev.status)
                       ? "text-red-400"
                       : "text-plasma"
                 }
               >
-                {statusLabel(event.status)}
+                {statusLabel(ev.status)}
               </span>
             </span>
           </div>
 
-          {/* Detail body */}
-          <div className="bg-surface-2 border border-border-1 rounded-lg p-4">
+          {Boolean(ev.rawData?.description) && (
+            <p className="text-[11px] text-chrome-dim font-mono leading-relaxed mb-4 border-l-2 border-plasma/40 pl-3">
+              {String(ev.rawData?.description)}
+            </p>
+          )}
+
+          {/* Input */}
+          {ev.inputHint && (
+            <div className="bg-surface-2 border border-border-1 rounded-lg p-4 mb-3">
+              <p className="text-[11px] text-chrome-dim font-mono uppercase tracking-widest mb-2">
+                Input
+              </p>
+              <p className="text-xs text-chrome font-mono leading-relaxed whitespace-pre-wrap">
+                {ev.inputHint}
+              </p>
+            </div>
+          )}
+
+          {/* Output */}
+          {ev.outputHint && (
+            <div className="bg-surface-2 border border-border-1 rounded-lg p-4 mb-3">
+              <p className="text-[11px] text-emerald-400 font-mono uppercase tracking-widest mb-2">
+                Output
+              </p>
+              <p className="text-xs text-chrome font-mono leading-relaxed whitespace-pre-wrap">
+                {ev.outputHint}
+              </p>
+            </div>
+          )}
+
+          {/* Operation Detail */}
+          <div className="bg-surface-2 border border-border-1 rounded-lg p-4 mb-3">
             <p className="text-[11px] text-chrome-dim font-mono uppercase tracking-widest mb-2">
               Operation Detail
             </p>
-            <p className="text-sm text-chrome font-mono leading-relaxed whitespace-pre-wrap">
-              {event.detail || "No detail available for this operation."}
+            <p className="text-xs text-chrome font-mono leading-relaxed whitespace-pre-wrap">
+              {ev.detail || "No detail available for this operation."}
             </p>
           </div>
 
-          {/* Agent description if available */}
+          {/* Completed steps */}
+          {completedSteps.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[11px] text-emerald-400 font-mono uppercase tracking-widest mb-2">
+                Steps completed so far
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {completedSteps.map((s) => (
+                  <span
+                    key={s}
+                    className="px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-[10px] font-mono text-emerald-400"
+                  >
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Raw agent data */}
+          {rawEntries.length > 0 && (
+            <details className="mb-3">
+              <summary className="cursor-pointer text-[11px] font-mono text-chrome-dim hover:text-plasma list-none mb-2">
+                <span className="text-plasma">&#9658;</span> Raw agent data
+              </summary>
+              <div className="bg-surface-2 border border-border-1 rounded-lg p-3 space-y-2 max-h-64 overflow-y-auto mt-2">
+                {rawEntries.map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="border-b border-border-1/40 pb-2 last:border-0 last:pb-0"
+                  >
+                    <p className="text-[10px] font-mono text-chrome-dim uppercase tracking-wider mb-0.5">
+                      {key.replace(/_/g, " ")}
+                    </p>
+                    <p className="text-[11px] font-mono text-chrome leading-relaxed break-words">
+                      {Array.isArray(value)
+                        ? value.length === 0
+                          ? "—"
+                          : value
+                              .map((item, i) =>
+                                typeof item === "object"
+                                  ? `${i + 1}. ${JSON.stringify(item).slice(0, 120)}`
+                                  : `${i + 1}. ${String(item)}`,
+                              )
+                              .join("\n")
+                        : typeof value === "object"
+                          ? JSON.stringify(value, null, 2).slice(0, 400)
+                          : String(value).slice(0, 300)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* Agent description */}
           {agentInfo && (
-            <p className="text-[11px] text-chrome-dim font-mono mt-4">
+            <p className="text-[11px] text-chrome-dim font-mono mt-2">
               {agentInfo.name} — {agentInfo.status}
             </p>
           )}
@@ -707,107 +812,145 @@ function ExplainabilityCard({
   event: ExplainabilityEvent;
   onOpen: (event: ExplainabilityEvent) => void;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const [tooltipPos, setTooltipPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const agentInfo = agentTimeline.find((a) => a.key === event.agent);
 
-  return (
-    <div className="relative">
+  function handleMouseEnter() {
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
+      setTooltipPos({ top: rect.top, left: rect.right + 8 });
+    }
+  }
+
+  function handleMouseLeave() {
+    setTooltipPos(null);
+  }
+
+  const tooltip = tooltipPos ? (
+    <AnimatePresence>
       <motion.div
-        key={event.id}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={`border rounded-lg p-3 bg-surface-2 ${statusBorderClass(event.status)} cursor-pointer hover:border-plasma/60 transition-colors group`}
-        onClick={() => onOpen(event)}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && onOpen(event)}
-        aria-label={`Open details for ${event.agent} — ${event.step}`}
+        key={event.id + "-tooltip"}
+        initial={{ opacity: 0, x: 8, scale: 0.95 }}
+        animate={{ opacity: 1, x: 0, scale: 1 }}
+        exit={{ opacity: 0, x: 8, scale: 0.95 }}
+        transition={{ duration: 0.12 }}
+        style={{
+          position: "fixed",
+          top: tooltipPos.top,
+          left: tooltipPos.left,
+          zIndex: 9999,
+          width: 224,
+        }}
+        className="pointer-events-none"
       >
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <div className="flex items-center gap-2 min-w-0">
-            <motion.span
-              initial={{
-                scale: 1,
-                boxShadow: `0 0 0 0 ${statusGlowColor(event.status)}`,
-              }}
-              animate={{
-                scale: [1, 1.55, 1],
-                boxShadow: [
-                  `0 0 0 0 ${statusGlowColor(event.status)}`,
-                  "0 0 0 7px transparent",
-                  "0 0 0 0 transparent",
-                ],
-              }}
-              transition={{ duration: 0.85, ease: "easeOut" }}
-              className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
-            />
-            <span className="text-xs text-plasma font-mono truncate">
-              {event.agent}
+        <div className="bg-void border border-border-2 rounded-lg p-3 shadow-2xl">
+          <div className="flex items-center gap-2 mb-1">
+            {agentInfo ? (
+              <agentInfo.icon size={12} style={{ color: agentInfo.color }} />
+            ) : (
+              <Network size={12} className="text-plasma" />
+            )}
+            <span className="text-[11px] font-mono text-chrome font-bold">
+              {agentInfo?.name ?? event.agent}
             </span>
           </div>
-          <span className="text-[10px] text-chrome-dim font-mono">
-            {event.status}
-          </span>
+          <p className="text-[10px] font-mono text-chrome-dim leading-relaxed">
+            {event.detail.length > 120
+              ? event.detail.slice(0, 120) + "…"
+              : event.detail}
+          </p>
+          {event.inputHint && (
+            <p className="text-[10px] font-mono text-chrome-dim mt-1.5 leading-relaxed">
+              <span className="text-plasma">In:</span>{" "}
+              {event.inputHint.slice(0, 80)}
+              {event.inputHint.length > 80 ? "…" : ""}
+            </p>
+          )}
+          {event.outputHint && (
+            <p className="text-[10px] font-mono text-chrome-dim mt-1 leading-relaxed">
+              <span className="text-emerald-400">Out:</span>{" "}
+              {event.outputHint.slice(0, 80)}
+              {event.outputHint.length > 80 ? "…" : ""}
+            </p>
+          )}
+          <p className="text-[10px] font-mono mt-1.5">
+            <span
+              className={
+                isSuccessStatus(event.status)
+                  ? "text-emerald-400"
+                  : isErrorStatus(event.status)
+                    ? "text-red-400"
+                    : "text-plasma"
+              }
+            >
+              {statusLabel(event.status)}
+            </span>
+          </p>
         </div>
-        <div className="text-xs text-chrome font-mono mb-1">{event.step}</div>
-        <p className="text-[11px] text-chrome-dim font-mono leading-relaxed line-clamp-2">
-          {event.detail}
-        </p>
-        {/* Click hint */}
-        <p className="text-[10px] text-chrome-dim/50 font-mono mt-1.5 group-hover:text-plasma/70 transition-colors">
-          Click to expand ↗
-        </p>
       </motion.div>
+    </AnimatePresence>
+  ) : null;
 
-      {/* Hover tooltip */}
-      <AnimatePresence>
-        {hovered && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.95 }}
-            animate={{ opacity: 1, y: -8, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.95 }}
-            transition={{ duration: 0.12 }}
-            className="absolute bottom-full left-0 right-0 z-20 mb-1 pointer-events-none"
-          >
-            <div className="bg-void border border-border-2 rounded-lg p-3 shadow-xl">
-              <div className="flex items-center gap-2 mb-1">
-                {agentInfo ? (
-                  <agentInfo.icon
-                    size={12}
-                    style={{ color: agentInfo.color }}
-                  />
-                ) : (
-                  <Network size={12} className="text-plasma" />
-                )}
-                <span className="text-[11px] font-mono text-chrome font-bold">
-                  {agentInfo?.name ?? event.agent}
-                </span>
-              </div>
-              <p className="text-[10px] font-mono text-chrome-dim leading-relaxed">
-                {event.detail.length > 120
-                  ? event.detail.slice(0, 120) + "…"
-                  : event.detail}
-              </p>
-              <p className="text-[10px] font-mono mt-1.5">
-                <span
-                  className={
-                    isSuccessStatus(event.status)
-                      ? "text-emerald-400"
-                      : isErrorStatus(event.status)
-                        ? "text-red-400"
-                        : "text-plasma"
-                  }
-                >
-                  {statusLabel(event.status)}
-                </span>
-              </p>
+  return (
+    <>
+      {typeof window !== "undefined" &&
+        tooltipPos &&
+        typeof document !== "undefined" &&
+        ReactDOM.createPortal(tooltip, document.body)}
+      <div className="relative" ref={cardRef}>
+        <motion.div
+          key={event.id}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`border rounded-lg p-3 bg-surface-2 ${statusBorderClass(event.status)} cursor-pointer hover:border-plasma/60 transition-colors group`}
+          onClick={() => onOpen(event)}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && onOpen(event)}
+          aria-label={`Open details for ${event.agent} — ${event.step}`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <motion.span
+                initial={{
+                  scale: 1,
+                  boxShadow: `0 0 0 0 ${statusGlowColor(event.status)}`,
+                }}
+                animate={{
+                  scale: [1, 1.55, 1],
+                  boxShadow: [
+                    `0 0 0 0 ${statusGlowColor(event.status)}`,
+                    "0 0 0 7px transparent",
+                    "0 0 0 0 transparent",
+                  ],
+                }}
+                transition={{ duration: 0.85, ease: "easeOut" }}
+                className={`h-2.5 w-2.5 rounded-full shrink-0 ${statusDotClass(event.status)}`}
+              />
+              <span className="text-xs text-plasma font-mono truncate">
+                {event.agent}
+              </span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+            <span className="text-[10px] text-chrome-dim font-mono">
+              {event.status}
+            </span>
+          </div>
+          <div className="text-xs text-chrome font-mono mb-1">{event.step}</div>
+          <p className="text-[11px] text-chrome-dim font-mono leading-relaxed line-clamp-2">
+            {event.detail}
+          </p>
+          <p className="text-[10px] text-chrome-dim/50 font-mono mt-1.5 group-hover:text-plasma/70 transition-colors">
+            Click to expand ↗
+          </p>
+        </motion.div>
+      </div>
+    </>
   );
 }
 
@@ -1037,6 +1180,47 @@ export default function ChatPage() {
     result?: unknown;
     data?: Record<string, unknown> | string | null;
   }) {
+    const raw =
+      event.data && typeof event.data === "object"
+        ? (event.data as Record<string, unknown>)
+        : null;
+
+    // Prefer explicit "input" field from backend, then fall back to known fields
+    const inputHint: string | null = raw
+      ? String(
+          (raw.input as string | undefined) ??
+            (raw.message as string | undefined) ??
+            (raw.query as string | undefined) ??
+            (raw.payload as string | undefined) ??
+            "",
+        ).slice(0, 400) || null
+      : null;
+
+    // Prefer explicit "output" field from backend, then fall back to known fields
+    const outputHint: string | null = raw
+      ? ((
+          (raw.output as string | undefined) ??
+          (raw.primary_cause as string | undefined) ??
+          (raw.root_cause as string | undefined) ??
+          (raw.results_count !== undefined
+            ? `Found ${raw.results_count} results`
+            : undefined) ??
+          (raw.report_length !== undefined
+            ? `Report length: ${raw.report_length} chars`
+            : undefined)
+        )
+          ?.toString()
+          .slice(0, 400) ?? null)
+      : null;
+
+    const detail = String(
+      event.detail ??
+        (raw ? (raw.message ?? raw.output ?? raw.error) : null) ??
+        event.message ??
+        event.result ??
+        "Step updated",
+    ).slice(0, 400);
+
     setExplainabilityEvents((prev: ExplainabilityEvent[]) => [
       ...prev,
       {
@@ -1044,9 +1228,10 @@ export default function ChatPage() {
         agent: event.agent ?? "system",
         step: event.step ?? event.event,
         status: event.status ?? "running",
-        detail: String(
-          event.detail ?? event.message ?? event.result ?? "Step updated",
-        ).slice(0, 240),
+        detail,
+        rawData: raw,
+        inputHint,
+        outputHint,
       },
     ]);
   }
