@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # ── LLM provider selection ────────────────────────────────────────────────
+    # LLM provider selection
     LLM_PROVIDER: str = "openai"
     LLM_MODEL: str = "gpt-4o"
     LLM_TEMPERATURE: float = 0.0
@@ -30,37 +30,37 @@ class Settings(BaseSettings):
     GITHUB_OAUTH_CLIENT_ID: str = ""
     GITHUB_OAUTH_CLIENT_SECRET: str = ""
 
-    # ── Logging ───────────────────────────────────────────────────────────────
+    # Logging
     LOG_DIR: str = "logs"
 
-    # ── Neo4j ─────────────────────────────────────────────────────────────────
+    # Neo4j
     NEO4J_URI: str = "bolt://neo4j:7687"
     NEO4J_USERNAME: str = "neo4j"
     NEO4J_PASSWORD: str = "password"
 
-    # ── PostgreSQL ────────────────────────────────────────────────────────────
+    # PostgreSQL
     POSTGRES_URL: str = "postgresql+asyncpg://postgres:password@postgres:5432/opspilot"
 
-    # ── Redis / Celery ────────────────────────────────────────────────────────
+    # Redis / Celery
     REDIS_URL: str = "redis://redis:6379/0"
     CELERY_BROKER_URL: str = "redis://redis:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://redis:6379/1"
 
-    # ── Auth / JWT ────────────────────────────────────────────────────────────
+    # Auth / JWT
     SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # ── CORS ──────────────────────────────────────────────────────────────────
+    # CORS
     ALLOWED_ORIGINS: str = "http://localhost:3000"
 
-    # ── Security / Guardrails ─────────────────────────────────────────────────
+    # Security / Guardrails
     ENABLE_PII_SCRUBBING: bool = True
     ENABLE_PROMPT_INJECTION_PROTECTION: bool = True
     MAX_QUERY_LENGTH: int = 4000
 
-    # ── GitHub MCP ───────────────────────────────────────────────────────────
+    # GitHub MCP
     # Create a Personal Access Token at https://github.com/settings/tokens
     # Required scopes: repo, read:org, read:user
     GITHUB_TOKEN: str = ""
