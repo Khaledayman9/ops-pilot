@@ -1,7 +1,8 @@
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.agents.classifier import ClassifierAgent, ClassificationInput, ClassificationOutput
+import pytest
+
+from app.agents.classifier import ClassificationInput, ClassificationOutput, ClassifierAgent
 
 
 @pytest.mark.asyncio

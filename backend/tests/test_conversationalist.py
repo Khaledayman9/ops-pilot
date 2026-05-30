@@ -1,7 +1,8 @@
 """Tests for ConversationalistAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.agents.conversationalist import ConversationalistAgent
 from app.agents.conversationalist.models import (
@@ -172,10 +173,7 @@ async def test_conversationalist_output_schema_valid(mock_conv_output_incident):
 async def test_conversationalist_multi_turn_history(mock_conv_output_incident):
     """Agent should accept and process multi-turn history without error."""
     agent = ConversationalistAgent()
-    history = [
-        ChatTurn(role="user", content=f"Turn {i} user message")
-        for i in range(10)
-    ]
+    history = [ChatTurn(role="user", content=f"Turn {i} user message") for i in range(10)]
     inp = ConversationalistInput(
         query="Another incident query",
         history=history,

@@ -1,7 +1,8 @@
 """Tests for RootCauseFinderAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.agents.root_cause_finder import RootCauseFinderAgent
 from app.agents.root_cause_finder.models import (

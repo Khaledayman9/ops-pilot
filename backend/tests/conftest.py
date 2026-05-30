@@ -1,14 +1,15 @@
 import pytest
+
 from app.agents import (
+    CausalFactor,
     ClassificationOutput,
     EntityExtraction,
     EntityExtractorOutput,
-    GraphAnalyzerQueryOutput,
-    CausalFactor,
-    RootCauseFinderOutput,
     EscalationPath,
+    GraphAnalyzerQueryOutput,
     RemediationStep,
     RemediatorOutput,
+    RootCauseFinderOutput,
 )
 
 

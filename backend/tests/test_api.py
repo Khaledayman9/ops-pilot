@@ -1,6 +1,7 @@
-import pytest
-from httpx import AsyncClient, ASGITransport
 from unittest.mock import AsyncMock, patch
+
+import pytest
+from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 
@@ -25,10 +26,11 @@ async def test_analyze_requires_auth():
 async def test_analyze_with_mock_auth(
     mock_classification, mock_graph_output, mock_root_cause, mock_remediation
 ):
-    from app.services.incident_service import IncidentService
-    from app.schemas.incident import IncidentResponse
-    from app.db.models import User
     import uuid
+
+    from app.db.models import User
+    from app.schemas.incident import IncidentResponse
+    from app.services.incident_service import IncidentService
 
     mock_resp = IncidentResponse(
         session_id="test-123",

@@ -1,7 +1,8 @@
 """Tests for RepoScoutAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.agents.repo_scouter import RepoScoutAgent
 from app.agents.repo_scouter.models import RepoScoutInput, RepoScoutOutput, RepoSummary
@@ -81,7 +82,9 @@ async def test_repo_scout_timeout_returns_graceful_output(base_input):
 async def test_repo_scout_initialization_failure_raises():
     """If MCP tools cannot be loaded, _initialize should raise."""
     agent = RepoScoutAgent()
-    with patch.object(agent, "_load_github_tools", new_callable=AsyncMock, side_effect=RuntimeError("No tools")):
+    with patch.object(
+        agent, "_load_github_tools", new_callable=AsyncMock, side_effect=RuntimeError("No tools")
+    ):
         with pytest.raises(RuntimeError, match="No tools"):
             await agent._initialize()
 

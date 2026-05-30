@@ -1,12 +1,13 @@
 """Auth endpoint tests."""
 
-import pytest
-from httpx import AsyncClient, ASGITransport
+import uuid
 from unittest.mock import AsyncMock, patch
 
+import pytest
+from httpx import ASGITransport, AsyncClient
+
 from app.main import app
-from app.schemas.auth import UserPublic, TokenResponse
-import uuid
+from app.schemas.auth import TokenResponse, UserPublic
 
 
 @pytest.mark.asyncio

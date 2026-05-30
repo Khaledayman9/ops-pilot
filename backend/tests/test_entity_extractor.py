@@ -1,7 +1,8 @@
 """Tests for EntityExtractorAgent (renamed from SearcherAgent)."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.agents.entity_extractor import (
     EntityExtractorAgent,

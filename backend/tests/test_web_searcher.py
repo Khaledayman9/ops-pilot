@@ -1,7 +1,8 @@
 """Tests for WebSearcherAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.agents.web_searcher import WebSearcherAgent
 from app.agents.web_searcher.models import SearchResult, WebSearchInput, WebSearchOutput
@@ -52,9 +53,7 @@ async def test_web_searcher_returns_output(mock_web_output):
     with patch.object(agent, "_chain") as mock_chain:
         mock_chain.ainvoke = AsyncMock(return_value=mock_web_output)
         with patch("app.agents.web_searcher.agent.web_search", return_value=[]):
-            result = await agent.run(
-                inp, service="checkout-service", incident_type="latency"
-            )
+            result = await agent.run(inp, service="checkout-service", incident_type="latency")
 
     assert isinstance(result, WebSearchOutput)
     assert len(result.results) > 0

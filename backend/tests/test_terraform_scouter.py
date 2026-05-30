@@ -1,7 +1,8 @@
 """Tests for TerraformScoutAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.agents.terraform_scouter import TerraformScoutAgent
 from app.agents.terraform_scouter.models import TerraformScoutInput, TerraformScoutOutput
@@ -89,10 +90,15 @@ async def test_terraform_scout_tools_used_recorded(base_input, mock_terraform_ou
 async def test_terraform_scout_init_raises_when_no_config():
     """Missing terraform config in servers.json should raise ValueError."""
     agent = TerraformScoutAgent()
-    with patch("builtins.open", MagicMock(return_value=MagicMock(
-        __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="{}"))),
-        __exit__=MagicMock(return_value=False),
-    ))):
+    with patch(
+        "builtins.open",
+        MagicMock(
+            return_value=MagicMock(
+                __enter__=MagicMock(return_value=MagicMock(read=MagicMock(return_value="{}"))),
+                __exit__=MagicMock(return_value=False),
+            )
+        ),
+    ):
         with patch("json.load", return_value={}):
             with pytest.raises(ValueError, match="terraform"):
                 await agent._initialize()

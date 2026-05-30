@@ -1,7 +1,8 @@
 """Tests for OpsAnalystAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.agents.ops_analyst import OpsAnalystAgent
 from app.agents.ops_analyst.models import AnalysisTask, OpsAnalystInput, OpsAnalystOutput

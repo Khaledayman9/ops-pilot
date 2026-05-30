@@ -1,7 +1,8 @@
 """Tests for RemediatorAgent."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from app.agents.remediator import RemediatorAgent
 from app.agents.remediator.models import (
