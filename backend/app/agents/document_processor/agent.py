@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from markitdown import MarkItDown
+
 from app.core import BaseAgent
 from logger import logger
-from markitdown import MarkItDown
 
 from .models import DocumentProcessorInput, DocumentProcessorOutput
 
@@ -22,13 +23,9 @@ class DocumentProcessorAgent(BaseAgent):
 
         if inp.inline_content is not None:
             markdown = inp.inline_content.strip()
-            self._log(
-                f"Inline passthrough mode: {len(markdown)} chars for {inp.filename}"
-            )
+            self._log(f"Inline passthrough mode: {len(markdown)} chars for {inp.filename}")
             if not markdown:
-                logger.warning(
-                    f"[document_processor] Inline content empty for {inp.filename}"
-                )
+                logger.warning(f"[document_processor] Inline content empty for {inp.filename}")
             return DocumentProcessorOutput(
                 filename=inp.filename,
                 markdown=markdown,

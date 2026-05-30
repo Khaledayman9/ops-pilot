@@ -20,7 +20,6 @@ from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
 from .utils import build_analysis_context, compact_history
 
-
 DEFAULT_ENABLED_AGENTS = {
     "orchestrator",
     "classifier",
@@ -95,7 +94,9 @@ class IncidentOrchestrator:
         )
         if "document_processor" in enabled_agents and state.document_context:
             filenames_label = (
-                ", ".join(state.document_filenames) if state.document_filenames else "uploaded document"
+                ", ".join(state.document_filenames)
+                if state.document_filenames
+                else "uploaded document"
             )
             yield StreamEvent(
                 event="step",
