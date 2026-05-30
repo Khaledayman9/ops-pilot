@@ -169,7 +169,7 @@ class IncidentOrchestrator:
                 data={
                     "message": "Document markdown attached to this orchestration turn",
                     "description": "Converts uploaded files (PDF, DOCX, etc.) to markdown and injects them into the pipeline context for all downstream agents.",
-                    "input": f"User query + document context",
+                    "input": query[:300],
                     "output": f"Attached {state.document_context_chars} chars of document markdown to pipeline",
                     "characters": state.document_context_chars,
                     "completed_steps": list(state.completed_steps),
