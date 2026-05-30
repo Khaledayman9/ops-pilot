@@ -1221,10 +1221,41 @@ export default function ChatPage() {
         ? (event.data as Record<string, unknown>)
         : null;
 
-    const rawInput = raw?.input ?? raw?.query ?? raw?.payload ?? null;
+    const isError = ["error", "failed", "failure"].includes(
+      (event.status ?? "").toLowerCase(),
+    );
+    const isComplete = ["complete", "completed", "success", "done"].includes(
+      (event.status ?? "").toLowerCase(),
+    );
+
+    // Build a synthetic description for orchestrator complete when backend omits it
+    const syntheticDescription =
+      event.agent === "orchestrator" && event.step === "complete" && isComplete
+        ? raw?.is_incident_relevant === false
+          ? "Orchestration complete — query was not incident-related; a conversational reply was generated."
+          : `Orchestration complete — full multi-agent pipeline finished. Completed steps: ${
+              Array.isArray(raw?.completed_steps)
+                ? (raw.completed_steps as string[]).join(", ")
+                : "see raw data"
+            }.`
+        : undefined;
+
+    const rawInput =
+      (raw?.input as string | undefined) ??
+      (raw?.query as string | undefined) ??
+      (raw?.payload as string | undefined) ??
+      null;
     const inputHint: string | null = rawInput
       ? String(rawInput).slice(0, 600) || null
       : null;
+
+    const effectiveInputHint: string | null =
+      inputHint ??
+      (event.agent === "orchestrator" &&
+      event.step === "complete" &&
+      raw?.natural_response
+        ? `Session: ${raw.session_id ?? "—"} | Incident relevant: ${raw.is_incident_relevant ?? "—"}`
+        : null);
 
     const rawOutput =
       raw?.output ??
@@ -1237,16 +1268,26 @@ export default function ChatPage() {
         ? `Report length: ${raw.report_length} chars`
         : undefined) ??
       null;
+
+    const syntheticOutput =
+      !rawOutput &&
+      event.agent === "orchestrator" &&
+      event.step === "complete" &&
+      isComplete
+        ? `Natural response: ${String(raw?.natural_response ?? "").slice(0, 300) || "generated"} | Errors: ${
+            Array.isArray(raw?.errors) && (raw.errors as unknown[]).length > 0
+              ? (raw.errors as unknown[]).join("; ").slice(0, 200)
+              : "none"
+          }`
+        : null;
+
     const outputHint: string | null = rawOutput
       ? String(rawOutput).slice(0, 600) || null
-      : null;
-
-    const isError = ["error", "failed", "failure"].includes(
-      (event.status ?? "").toLowerCase(),
-    );
+      : syntheticOutput;
 
     const detail = String(
       (raw?.description as string | undefined) ??
+        syntheticDescription ??
         (raw?.message as string | undefined) ??
         (!isError ? (raw?.error as string | undefined) : undefined) ??
         event.detail ??
@@ -1268,7 +1309,7 @@ export default function ChatPage() {
         status: event.status ?? "running",
         detail,
         rawData: raw,
-        inputHint,
+        inputHint: effectiveInputHint,
         outputHint,
         errorInfo,
       },
