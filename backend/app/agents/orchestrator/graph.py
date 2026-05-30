@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+
 from collections.abc import AsyncGenerator
 
 from app.schemas.stream import StreamEvent
@@ -8,7 +8,7 @@ from logger import logger
 
 from ..classifier import ClassificationInput, ClassifierAgent
 from ..conversationalist import ConversationalistAgent, ConversationalistInput
-from ..conversationalist.models import ChatTurn
+
 from ..crew.incident_crew import IncidentAnalysisCrew
 from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
 from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
@@ -19,13 +19,11 @@ from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
 from ..terraform_scouter import TerraformScoutAgent, TerraformScoutInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
+from .utils import compact_history, build_analysis_context
 
-
-_MAX_HISTORY_TURNS = 10
 
 DEFAULT_ENABLED_AGENTS = {
     "orchestrator",
-    "document_processor",
     "classifier",
     "entity_extractor",
     "repo_scout",
@@ -48,63 +46,6 @@ REQUIRED_AGENTS = {
     "remediator",
     "conversationalist",
 }
-
-
-def _build_analysis_context(state: IncidentState) -> str:
-    """Flatten key pipeline outputs into a single text block for the conversationalist."""
-    parts: list[str] = []
-
-    if state.service:
-        parts.append(f"Service: {state.service}")
-    if state.severity:
-        parts.append(f"Severity: {state.severity}")
-    if state.incident_type:
-        parts.append(f"Incident type: {state.incident_type}")
-    if state.root_cause:
-        parts.append(f"Root cause: {state.root_cause}")
-    if state.causal_chain:
-        chain = "; ".join(f["factor"] for f in state.causal_chain if "factor" in f)
-        parts.append(f"Causal chain: {chain}")
-    if state.remediation_steps:
-        steps = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.remediation_steps))
-        parts.append(f"Remediation steps:\n{steps}")
-    if state.rollback_steps:
-        steps = "\n".join(f"  {i + 1}. {s}" for i, s in enumerate(state.rollback_steps))
-        parts.append(f"Rollback steps:\n{steps}")
-    if state.timeline:
-        parts.append(f"Timeline: {'; '.join(state.timeline)}")
-    if state.repo_scout_summary:
-        parts.append(f"Repo scout: {state.repo_scout_summary[:400]}")
-    if state.terraform_scout_summary:
-        parts.append(f"Terraform scout: {state.terraform_scout_summary[:400]}")
-    if state.ops_analyst_result:
-        parts.append(f"Ops diagnostics: {state.ops_analyst_result[:400]}")
-
-    return "\n".join(parts)
-
-
-def _compact_history(raw_history: list[dict]) -> list[ChatTurn]:
-    """
-    Convert raw stored message dicts into ChatTurn objects.
-    Keeps the most recent _MAX_HISTORY_TURNS turns to stay within context limits.
-    If a message contains a compacted summary marker, prefer that over the raw content.
-    """
-    turns: list[ChatTurn] = []
-    for msg in raw_history:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role == "assistant":
-            try:
-                parsed = json.loads(content)
-                if isinstance(parsed, dict) and "conversation_summary" in parsed:
-                    content = parsed["conversation_summary"]
-                elif isinstance(parsed, list):
-                    content = content[:300]
-            except (json.JSONDecodeError, ValueError):
-                content = content[:300]
-        turns.append(ChatTurn(role=role, content=content))
-
-    return turns[-_MAX_HISTORY_TURNS:]
 
 
 class IncidentOrchestrator:
@@ -135,7 +76,7 @@ class IncidentOrchestrator:
         state.document_context = document_context or ""
         state.document_context_chars = len(state.document_context)
 
-        compacted_history = _compact_history(chat_history or [])
+        compacted_history = compact_history(chat_history or [])
 
         effective_query = query
         if state.document_context:
@@ -878,7 +819,7 @@ class IncidentOrchestrator:
                     incident_structured=incident_structured,
                     web_citations=state.web_citations,
                     is_incident_query=True,
-                    analysis_context=_build_analysis_context(state),
+                    analysis_context=build_analysis_context(state),
                 )
             )
             state.natural_response = conv_out.natural_response
