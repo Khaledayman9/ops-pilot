@@ -1,8 +1,10 @@
 import json
-from .models import IncidentState
+
 from ..conversationalist.models import ChatTurn
+from .models import IncidentState
 
 _MAX_HISTORY_TURNS = 10
+
 
 def should_skip_graph(state: IncidentState) -> bool:
     """Skip graph traversal if no service was classified."""

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 from collections.abc import AsyncGenerator
 
 from app.schemas.stream import StreamEvent
@@ -8,7 +7,6 @@ from logger import logger
 
 from ..classifier import ClassificationInput, ClassifierAgent
 from ..conversationalist import ConversationalistAgent, ConversationalistInput
-
 from ..crew.incident_crew import IncidentAnalysisCrew
 from ..entity_extractor import EntityExtractorAgent, EntityExtractorInput
 from ..graph_analyzer import GraphAnalyzerAgent, GraphAnalyzerQueryInput
@@ -19,8 +17,7 @@ from ..root_cause_finder import RootCauseFinderAgent, RootCauseFinderInput
 from ..terraform_scouter import TerraformScoutAgent, TerraformScoutInput
 from ..web_searcher import WebSearcherAgent, WebSearchInput
 from .models import IncidentState
-from .utils import compact_history, build_analysis_context
-
+from .utils import build_analysis_context, compact_history
 
 DEFAULT_ENABLED_AGENTS = {
     "orchestrator",
@@ -177,7 +174,11 @@ class IncidentOrchestrator:
                     "message": "Generating natural language response for off-topic query",
                     "description": "Query was not incident-related; conversationalist generates a direct chat response without running the full pipeline.",
                     "input": query[:300],
-                    "steps": ["Detect off-topic intent", "Generate direct conversational reply", "Summarize for history"],
+                    "steps": [
+                        "Detect off-topic intent",
+                        "Generate direct conversational reply",
+                        "Summarize for history",
+                    ],
                 },
             )
             try:
@@ -204,7 +205,9 @@ class IncidentOrchestrator:
                         "message": "Natural response ready",
                         "description": "Conversational reply generated for off-topic query.",
                         "input": query[:300],
-                        "output": conv_out.natural_response[:400] if conv_out.natural_response else "Response generated",
+                        "output": conv_out.natural_response[:400]
+                        if conv_out.natural_response
+                        else "Response generated",
                         "completed_steps": list(state.completed_steps),
                     },
                 )
@@ -295,7 +298,13 @@ class IncidentOrchestrator:
                     "message": "Scouting GitHub repository for recent activity",
                     "description": "Scans the GitHub repo associated with the affected service for recent commits, open PRs, and failing CI checks that may correlate with the incident.",
                     "input": f"Service: {state.service} | Incident type: {state.incident_type}",
-                    "steps": ["Resolve owner/repo from service name", "Fetch recent commits", "Check open PRs", "Check failing CI checks", "Summarize findings"],
+                    "steps": [
+                        "Resolve owner/repo from service name",
+                        "Fetch recent commits",
+                        "Check open PRs",
+                        "Check failing CI checks",
+                        "Summarize findings",
+                    ],
                 },
             )
             try:
@@ -362,7 +371,13 @@ class IncidentOrchestrator:
                     "message": "Inspecting Terraform/IaC context",
                     "description": "Checks Terraform workspace state for recent plan/apply runs and infrastructure drift that may have caused or contributed to the incident.",
                     "input": f"Workspace: {state.service or 'default'} | Query: {query[:150]}",
-                    "steps": ["Load workspace state", "Detect recent plan/apply runs", "Identify drift", "Correlate with incident", "Summarize IaC findings"],
+                    "steps": [
+                        "Load workspace state",
+                        "Detect recent plan/apply runs",
+                        "Identify drift",
+                        "Correlate with incident",
+                        "Summarize IaC findings",
+                    ],
                 },
             )
             try:
@@ -566,7 +581,13 @@ class IncidentOrchestrator:
                     "message": "Running operational diagnostics",
                     "description": "Queries observability tools (metrics, traces, logs) to detect error rate spikes, latency anomalies, and saturation signals for the affected service.",
                     "input": f"Service: {state.service} | Query: {query[:200]}",
-                    "steps": ["Query metrics store", "Check error rates", "Check latency percentiles", "Check saturation signals", "Summarize telemetry findings"],
+                    "steps": [
+                        "Query metrics store",
+                        "Check error rates",
+                        "Check latency percentiles",
+                        "Check saturation signals",
+                        "Summarize telemetry findings",
+                    ],
                 },
             )
             try:
@@ -590,7 +611,9 @@ class IncidentOrchestrator:
                     data={
                         "description": "Telemetry diagnostics complete — error rates, latency, and saturation signals recorded.",
                         "input": f"Service: {state.service}",
-                        "output": analyst_out.result[:400] if analyst_out.result else "No telemetry anomalies detected",
+                        "output": analyst_out.result[:400]
+                        if analyst_out.result
+                        else "No telemetry anomalies detected",
                         "result": analyst_out.result[:500],
                         "tools_used": analyst_out.tools_used,
                         "completed_steps": list(state.completed_steps),
@@ -625,7 +648,11 @@ class IncidentOrchestrator:
                     "message": "Running CrewAI intelligence crew",
                     "description": "Runs a multi-agent CrewAI crew (Researcher → Analyst → Writer) to gather, correlate, and synthesize external intelligence about the incident.",
                     "input": f"Service: {state.service} | Type: {state.incident_type} | Query: {query[:150]}",
-                    "steps": ["Researcher agent: gather known issues", "Analyst agent: correlate signals", "Writer agent: synthesize intelligence report"],
+                    "steps": [
+                        "Researcher agent: gather known issues",
+                        "Analyst agent: correlate signals",
+                        "Writer agent: synthesize intelligence report",
+                    ],
                 },
             )
             try:
@@ -787,7 +814,12 @@ class IncidentOrchestrator:
                 "message": "Generating natural language explanation",
                 "description": "Synthesizes all pipeline outputs into a coherent, human-readable incident narrative using an LLM, including citations and a conversation summary for history.",
                 "input": f"Root cause: {state.root_cause or 'unknown'} | Remediation steps: {len(state.remediation_steps)} | Service: {state.service}",
-                "steps": ["Synthesize pipeline outputs", "Generate human-readable narrative", "Include citations", "Summarize for history"],
+                "steps": [
+                    "Synthesize pipeline outputs",
+                    "Generate human-readable narrative",
+                    "Include citations",
+                    "Summarize for history",
+                ],
             },
         )
 
@@ -834,7 +866,9 @@ class IncidentOrchestrator:
                 data={
                     "description": "Natural language narrative generated and ready to display.",
                     "input": f"Root cause: {state.root_cause or 'unknown'} | Service: {state.service}",
-                    "output": state.natural_response[:400] if state.natural_response else "Response generated",
+                    "output": state.natural_response[:400]
+                    if state.natural_response
+                    else "Response generated",
                     "message": "Natural response generated",
                     "completed_steps": list(state.completed_steps),
                 },
