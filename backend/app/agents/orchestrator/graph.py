@@ -300,7 +300,12 @@ class IncidentOrchestrator:
                 data={
                     "description": "Orchestration complete — query was not incident-related; a conversational reply was generated without running the full pipeline.",
                     "input": query[:300],
-                    "output": f"Natural response generated ({len(state.natural_response or '')} chars). Completed steps: {', '.join(state.completed_steps)}",
+                    "output": f"Natural response generated ({len(state.natural_response or '')} chars)."
+                    + (
+                        f" Completed steps: {', '.join(state.completed_steps)}."
+                        if state.completed_steps
+                        else ""
+                    ),
                     "session_id": state.session_id,
                     "is_incident_relevant": False,
                     "natural_response": state.natural_response,
