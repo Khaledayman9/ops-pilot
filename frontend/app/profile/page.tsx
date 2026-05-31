@@ -3,17 +3,10 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import {
-  ArrowLeft,
-  Github,
-  KeyRound,
-  LogIn,
-  LogOut,
-  Settings,
-  User,
-  Zap,
-} from "lucide-react";
+import { Github, KeyRound, LogIn, LogOut, Settings, User } from "lucide-react";
 import { clearTokens, getAccessToken, getMe, UserPublic } from "../lib/apis";
+import NavBar from "../components/NavBar";
+import PageFooter from "../components/PageFooter";
 
 type LLMConfig = {
   provider: string;
@@ -83,29 +76,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-void grid-bg text-chrome">
-      <nav className="border-b border-border-1 bg-void/80 backdrop-blur-md">
-        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link
-            href="/chat"
-            className="flex items-center gap-2 hover:text-plasma transition-colors"
-          >
-            <ArrowLeft size={16} />
-            <Zap size={16} className="text-plasma" />
-            <span className="font-display font-semibold text-sm">
-              ops<span className="text-plasma">-pilot</span>
-            </span>
-          </Link>
-          <Link
-            href="/settings"
-            className="text-xs font-mono text-chrome-dim hover:text-plasma transition-colors"
-          >
-            Settings
-          </Link>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-void grid-bg text-chrome flex flex-col">
+      <NavBar variant="inner" />
 
-      <main className="max-w-5xl mx-auto px-6 py-12">
+      <main className="flex-1 max-w-5xl mx-auto w-full px-6 py-12 pt-24">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -230,6 +204,7 @@ export default function ProfilePage() {
           </Link>
         </motion.div>
       </main>
+      <PageFooter />
     </div>
   );
 }

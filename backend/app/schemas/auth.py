@@ -1,4 +1,5 @@
 from __future__ import annotations
+import uuid
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -15,7 +16,7 @@ class UserLogin(BaseModel):
 
 
 class UserPublic(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     username: str
     is_active: bool

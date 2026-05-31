@@ -1,27 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, LogIn, Moon, Settings, Sun, User } from "lucide-react";
-import { getAccessToken } from "../lib/apis";
+import {
+  ChevronDown,
+  LogIn,
+  LogOut,
+  Moon,
+  Settings,
+  Sun,
+  User,
+} from "lucide-react";
+import { getAccessToken, clearTokens } from "../lib/apis";
+import { useRouter } from "next/navigation";
 
 export default function ProfileMenu() {
   const [open, setOpen] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const router = useRouter();
 
   useEffect(() => {
-    setAuthed(Boolean(getAccessToken()));
+    function syncAuth() {
+      setAuthed(Boolean(getAccessToken()));
+    }
+    syncAuth();
+    const interval = setInterval(syncAuth, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
+  useEffect(() => {
     const savedTheme =
       typeof window !== "undefined"
         ? localStorage.getItem("ops-pilot-theme")
         : null;
     const initialTheme = savedTheme === "light" ? "light" : "dark";
-
     setTheme(initialTheme);
     document.documentElement.dataset.theme = initialTheme;
   }, []);
+
+  function handleLogout() {
+    clearTokens();
+    setAuthed(false);
+    setOpen(false);
+    router.push("/login");
+  }
 
   function toggleTheme() {
     setTheme((current) => {
@@ -57,13 +80,22 @@ export default function ProfileMenu() {
         {open && (
           <div className="absolute right-0 mt-2 w-48 bg-surface-1 border border-border-1 rounded-lg p-2 shadow-xl">
             {authed ? (
-              <Link
-                href="/profile"
-                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-              >
-                <User size={13} />
-                View profile
-              </Link>
+              <>
+                <Link
+                  href="/profile"
+                  className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
+                >
+                  <User size={13} />
+                  View profile
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-ember transition-colors"
+                >
+                  <LogOut size={13} />
+                  Logout
+                </button>
+              </>
             ) : (
               <Link
                 href="/login"

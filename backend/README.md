@@ -526,7 +526,7 @@ The auth system lives in `app/services/auth_service.py` and `app/core/security.p
 ### Registration flow
 
 1. Validate email uniqueness and username uniqueness in PostgreSQL.
-2. Hash password with bcrypt (`passlib[bcrypt]`).
+2. Hash password with bcrypt.
 3. Create `User` record with `is_active=True`, `is_verified=False`.
 4. Return `UserPublic` schema (never the hashed password).
 
