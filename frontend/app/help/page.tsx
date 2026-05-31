@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  ArrowLeft,
   CheckCircle2,
   GitBranch,
   HelpCircle,
@@ -13,6 +12,8 @@ import {
   Workflow,
   Zap,
 } from "lucide-react";
+import NavBar from "../components/NavBar";
+import PageFooter from "../components/PageFooter";
 
 const sections = [
   {
@@ -48,40 +49,9 @@ const checklist = [
 export default function HelpPage() {
   return (
     <div className="min-h-screen bg-void grid-bg text-chrome">
-      <nav className="border-b border-border-1 bg-void/80 backdrop-blur-md">
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex items-center gap-2 hover:text-plasma transition-colors"
-          >
-            <ArrowLeft size={16} />
-            <Zap size={16} className="text-plasma" />
-            <span className="font-display font-semibold text-sm">
-              ops<span className="text-plasma">-pilot</span>
-            </span>
-          </Link>
+      <NavBar variant="inner" />
 
-          <div className="flex items-center gap-4 text-xs font-mono text-chrome-dim">
-            <Link href="/chat" className="hover:text-plasma transition-colors">
-              Chat
-            </Link>
-            <Link
-              href="/contact"
-              className="hover:text-plasma transition-colors"
-            >
-              Contact
-            </Link>
-            <Link
-              href="/settings"
-              className="hover:text-plasma transition-colors"
-            >
-              Settings
-            </Link>
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-6xl mx-auto px-6 py-16">
+      <main className="max-w-6xl mx-auto px-6 py-16 pt-24">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -151,6 +121,7 @@ export default function HelpPage() {
           </Link>
         </div>
       </main>
+      <PageFooter />
     </div>
   );
 }

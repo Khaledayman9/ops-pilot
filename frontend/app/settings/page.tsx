@@ -14,6 +14,8 @@ import {
   EyeOff,
   Wrench,
 } from "lucide-react";
+import NavBar from "../components/NavBar";
+import PageFooter from "../components/PageFooter";
 
 interface LLMConfig {
   provider: "openai" | "anthropic" | "google";
@@ -339,23 +341,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-void">
-      {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 border-b border-border-1 bg-void/80 backdrop-blur-md">
-        <div className="max-w-4xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Zap size={16} className="text-plasma" />
-            <span className="font-display font-semibold text-chrome tracking-tight text-sm">
-              ops<span className="text-plasma">-pilot</span>
-            </span>
-          </Link>
-          <div className="flex items-center gap-4 text-xs font-mono text-chrome-dim">
-            <Link href="/chat" className="hover:text-plasma transition-colors">
-              Chat
-            </Link>
-            <span className="text-plasma">Settings</span>
-          </div>
-        </div>
-      </nav>
+      <NavBar variant="inner" />
 
       <div className="max-w-4xl mx-auto px-6 pt-24 pb-16">
         <motion.div
@@ -639,6 +625,7 @@ export default function SettingsPage() {
           </div>
         </motion.div>
       </div>
+      <PageFooter />
     </div>
   );
 }

@@ -24,6 +24,8 @@ import {
   Wrench,
   Zap,
 } from "lucide-react";
+import NavBar from "./components/NavBar";
+import PageFooter from "./components/PageFooter";
 
 type AnimeInstance = { pause: () => void };
 type AnimeStatic = { (params: Record<string, unknown>): AnimeInstance };
@@ -319,60 +321,6 @@ const particlePositions = [
   { left: "94%", top: "14%" },
 ];
 
-function Nav() {
-  return (
-    <nav className="fixed top-0 w-full z-50 border-b border-border-1 bg-void/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <Zap size={18} className="text-plasma" />
-          <span className="font-display font-semibold text-chrome tracking-tight">
-            ops<span className="text-plasma">-pilot</span>
-          </span>
-        </Link>
-
-        <div className="flex items-center gap-5 text-xs font-mono">
-          <a
-            href="#orchestration"
-            className="text-chrome-dim hover:text-plasma transition-colors hidden md:block"
-          >
-            Orchestration
-          </a>
-          <a
-            href="#capabilities"
-            className="text-chrome-dim hover:text-plasma transition-colors hidden md:block"
-          >
-            Capabilities
-          </a>
-          <Link
-            href="/help"
-            className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block"
-          >
-            Help
-          </Link>
-          <Link
-            href="/contact"
-            className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block"
-          >
-            Contact
-          </Link>
-          <Link
-            href="/settings"
-            className="text-chrome-dim hover:text-plasma transition-colors hidden sm:block"
-          >
-            Settings
-          </Link>
-          <Link
-            href="/chat"
-            className="px-4 py-1.5 bg-plasma text-void font-display font-semibold rounded text-xs hover:bg-plasma-dim transition-colors"
-          >
-            LAUNCH
-          </Link>
-        </div>
-      </div>
-    </nav>
-  );
-}
-
 function TerminalSim() {
   const [lines, setLines] = useState<typeof simLines>([]);
   const [running, setRunning] = useState(false);
@@ -600,7 +548,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-void grid-bg overflow-x-hidden">
-      <Nav />
+      <NavBar variant="home" />
 
       <section className="relative min-h-screen flex items-center pt-14">
         <div
@@ -926,34 +874,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer className="border-t border-border-1 py-8">
-        <div className="max-w-7xl mx-auto px-6 flex flex-wrap gap-4 items-center justify-between text-xs text-chrome-dim font-mono">
-          <div className="flex items-center gap-2">
-            <Zap size={12} className="text-plasma" />
-            ops-pilot v0.1.0
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/chat" className="hover:text-plasma transition-colors">
-              Chat
-            </Link>
-            <Link href="/help" className="hover:text-plasma transition-colors">
-              Help
-            </Link>
-            <Link
-              href="/contact"
-              className="hover:text-plasma transition-colors"
-            >
-              Contact
-            </Link>
-            <Link
-              href="/settings"
-              className="hover:text-plasma transition-colors"
-            >
-              Settings
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <PageFooter />
     </div>
   );
 }
