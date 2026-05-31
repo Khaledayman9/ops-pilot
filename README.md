@@ -63,7 +63,7 @@ Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response
 <details>
 <summary>Settings</summary>
 
-<img width="1919" height="917" alt="Opspilot 3" src="https://github.com/user-attachments/assets/51979de9-449c-400e-b9c2-7e576715fcf2" />
+<img width="1916" height="906" alt="Settings" src="https://github.com/user-attachments/assets/694e8b6b-fa2c-4675-aa9b-edef9116918d" />
 
 </details>
 
@@ -89,6 +89,40 @@ Ops-Pilot is a production-grade, multi-agent AI system for SRE incident response
 **Cancel Operation:**
 
 <img width="1918" height="903" alt="Cancel" src="https://github.com/user-attachments/assets/7c0863be-931d-43d6-bf69-98d7a82824ac" />
+
+</details>
+
+<details>
+<summary>Authentication & Profile</summary>
+
+**Login:**
+
+<img width="1922" height="908" alt="Login" src="https://github.com/user-attachments/assets/4ec5e1c1-f906-4726-b6c6-a596b672670f" />
+
+**Register:**
+
+<img width="1918" height="909" alt="Register" src="https://github.com/user-attachments/assets/8c57ed85-c02a-4355-893e-10cad904468f" />
+
+<img width="1920" height="910" alt="Register 2" src="https://github.com/user-attachments/assets/c184cf54-8e69-4cf7-9268-730693d41db5" />
+
+**Profile:**
+
+<img width="1920" height="914" alt="Profile Vierw" src="https://github.com/user-attachments/assets/b26f2210-947c-4886-8299-c31f610bc6aa" />
+
+</details>
+
+</details>
+
+<details>
+<summary>Help & Contact</summary>
+
+**Help:**
+
+<img width="1916" height="909" alt="Help Page" src="https://github.com/user-attachments/assets/afca9958-42d6-4e7d-9188-6611e238f780" />
+
+**Contact:**
+
+<img width="1919" height="925" alt="Contact Page" src="https://github.com/user-attachments/assets/7ae78aaa-bb15-4cfd-aea0-d262214dc315" />
 
 </details>
 
