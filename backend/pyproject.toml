@@ -41,6 +41,7 @@ dependencies = [
     "sse-starlette>=2.1.0",
     "uvicorn[standard]>=0.29.0",
     "markitdown>=0.1.6",
+    "bcrypt>=5.0.0",
 ]
 
 [build-system]

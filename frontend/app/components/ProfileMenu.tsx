@@ -2,15 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  ChevronDown,
-  LogIn,
-  Moon,
-  Settings,
-  Sun,
-  User,
-  UserPlus,
-} from "lucide-react";
+import { ChevronDown, LogIn, Moon, Settings, Sun, User } from "lucide-react";
 import { getAccessToken } from "../lib/apis";
 
 export default function ProfileMenu() {
@@ -73,22 +65,13 @@ export default function ProfileMenu() {
                 View profile
               </Link>
             ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-                >
-                  <LogIn size={13} />
-                  Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
-                >
-                  <UserPlus size={13} />
-                  Register
-                </Link>
-              </>
+              <Link
+                href="/login"
+                className="flex items-center gap-2 px-3 py-2 rounded text-xs font-mono text-chrome-dim hover:bg-surface-2 hover:text-plasma"
+              >
+                <LogIn size={13} />
+                Login
+              </Link>
             )}
 
             <Link

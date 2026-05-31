@@ -11,7 +11,6 @@ import {
   LogOut,
   Settings,
   User,
-  UserPlus,
   Zap,
 } from "lucide-react";
 import { clearTokens, getAccessToken, getMe, UserPublic } from "../lib/apis";
@@ -139,13 +138,6 @@ export default function ProfilePage() {
                 >
                   <LogIn size={15} />
                   Login
-                </Link>
-                <Link
-                  href="/register"
-                  className="inline-flex items-center gap-2 px-5 py-3 border border-border-2 text-chrome-dim rounded-lg font-mono text-sm hover:border-plasma hover:text-plasma"
-                >
-                  <UserPlus size={15} />
-                  Register
                 </Link>
               </div>
             </section>
