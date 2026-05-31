@@ -10,7 +10,6 @@ import {
   Settings,
   Terminal,
   Workflow,
-  Zap,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import PageFooter from "../components/PageFooter";

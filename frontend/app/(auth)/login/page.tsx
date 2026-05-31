@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Github, Loader2, Lock, Mail, Zap } from "lucide-react";
+import { AlertCircle, Github, Loader2, Lock, Mail } from "lucide-react";
 import { ApiException, login, startOAuth } from "../../lib/apis";
 import NavBar from "../../components/NavBar";
 import PageFooter from "../../components/PageFooter";

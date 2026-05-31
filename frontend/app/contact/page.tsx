@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
@@ -10,7 +9,6 @@ import {
   MessageSquare,
   Send,
   Shield,
-  Zap,
 } from "lucide-react";
 import NavBar from "../components/NavBar";
 import PageFooter from "../components/PageFooter";

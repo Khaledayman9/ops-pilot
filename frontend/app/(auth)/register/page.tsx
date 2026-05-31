@@ -11,7 +11,6 @@ import {
   Lock,
   Mail,
   User,
-  Zap,
 } from "lucide-react";
 import { ApiException, register } from "../../lib/apis";
 import NavBar from "../../components/NavBar";

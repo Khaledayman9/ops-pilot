@@ -22,7 +22,6 @@ import {
   Terminal,
   Workflow,
   Wrench,
-  Zap,
 } from "lucide-react";
 import NavBar from "./components/NavBar";
 import PageFooter from "./components/PageFooter";
