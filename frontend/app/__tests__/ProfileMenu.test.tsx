@@ -1,32 +1,50 @@
 /**
  * ProfileMenu.test.tsx
- * Component tests for the ProfileMenu — toggle, auth state, theme switch.
+ * Component tests for the ProfileMenu — toggle, auth state, theme switch, logout.
  */
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import ProfileMenu from "../components/ProfileMenu";
 import * as apis from "../lib/apis";
 
-// Mock Next.js Link so it renders a plain <a>
+// Mock Next.js Link
 jest.mock("next/link", () => {
-  const Link = ({ href, children }: { href: string; children: React.ReactNode }) => (
-    <a href={href}>{children}</a>
-  );
+  const Link = ({
+    href,
+    children,
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => <a href={href}>{children}</a>;
   Link.displayName = "Link";
   return Link;
 });
 
+// Mock Next.js navigation
+const mockPush = jest.fn();
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+  usePathname: () => "/",
+}));
+
+// Mock apis
 jest.mock("../lib/apis", () => ({
   getAccessToken: jest.fn(),
+  clearTokens: jest.fn(),
 }));
 
 const mockGetAccessToken = apis.getAccessToken as jest.Mock;
+const mockClearTokens = apis.clearTokens as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Reset localStorage and document theme
+  jest.useFakeTimers();
   localStorage.clear();
   document.documentElement.dataset.theme = "";
+});
+
+afterEach(() => {
+  jest.useRealTimers();
 });
 
 // ---------------------------------------------------------------------------
@@ -55,7 +73,6 @@ describe("ProfileMenu dropdown", () => {
     render(<ProfileMenu />);
     fireEvent.click(screen.getByText("Profile"));
     expect(screen.getByText("Login")).toBeInTheDocument();
-    expect(screen.getByText("Register")).toBeInTheDocument();
   });
 
   it("closes dropdown on second click", () => {
@@ -71,20 +88,21 @@ describe("ProfileMenu dropdown", () => {
 // Auth state
 // ---------------------------------------------------------------------------
 describe("ProfileMenu auth state", () => {
-  it("shows Login and Register links when not authenticated", () => {
+  it("shows Login link when not authenticated", () => {
     mockGetAccessToken.mockReturnValue(undefined);
     render(<ProfileMenu />);
     fireEvent.click(screen.getByText("Profile"));
     expect(screen.getByText("Login")).toBeInTheDocument();
-    expect(screen.getByText("Register")).toBeInTheDocument();
     expect(screen.queryByText("View profile")).not.toBeInTheDocument();
+    expect(screen.queryByText("Logout")).not.toBeInTheDocument();
   });
 
-  it("shows View profile link when authenticated", () => {
+  it("shows View profile and Logout when authenticated", () => {
     mockGetAccessToken.mockReturnValue("some-token");
     render(<ProfileMenu />);
     fireEvent.click(screen.getByText("Profile"));
     expect(screen.getByText("View profile")).toBeInTheDocument();
+    expect(screen.getByText("Logout")).toBeInTheDocument();
     expect(screen.queryByText("Login")).not.toBeInTheDocument();
   });
 
@@ -93,6 +111,47 @@ describe("ProfileMenu auth state", () => {
     render(<ProfileMenu />);
     fireEvent.click(screen.getByText("Profile"));
     expect(screen.getByText("Settings")).toBeInTheDocument();
+  });
+
+  it("reflects auth change via polling interval", () => {
+    mockGetAccessToken.mockReturnValue(undefined);
+    render(<ProfileMenu />);
+
+    // Initially unauthenticated
+    fireEvent.click(screen.getByText("Profile"));
+    expect(screen.getByText("Login")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Profile")); // close
+
+    // Token appears — poll fires after 1s
+    mockGetAccessToken.mockReturnValue("new-token");
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    fireEvent.click(screen.getByText("Profile"));
+    expect(screen.getByText("View profile")).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Logout
+// ---------------------------------------------------------------------------
+describe("ProfileMenu logout", () => {
+  it("calls clearTokens and redirects to /login on logout", () => {
+    mockGetAccessToken.mockReturnValue("some-token");
+    render(<ProfileMenu />);
+    fireEvent.click(screen.getByText("Profile"));
+    fireEvent.click(screen.getByText("Logout"));
+    expect(mockClearTokens).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith("/login");
+  });
+
+  it("closes the dropdown after logout", () => {
+    mockGetAccessToken.mockReturnValue("some-token");
+    render(<ProfileMenu />);
+    fireEvent.click(screen.getByText("Profile"));
+    fireEvent.click(screen.getByText("Logout"));
+    expect(screen.queryByText("View profile")).not.toBeInTheDocument();
   });
 });
 
