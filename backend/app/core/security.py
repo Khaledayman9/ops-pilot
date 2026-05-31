@@ -8,20 +8,20 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt
-from passlib.context import CryptContext
 
 from settings import settings
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+import bcrypt
 
 
 def hash_password(plain: str) -> str:
-    return pwd_context.hash(plain.encode("utf-8")[:72].decode("utf-8", errors="ignore"))
+    truncated = plain.encode("utf-8")[:72]
+    return bcrypt.hashpw(truncated, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode("utf-8")[:72], hashed.encode("utf-8"))
 
 
 def _make_token(data: dict, expires_delta: timedelta) -> str:
