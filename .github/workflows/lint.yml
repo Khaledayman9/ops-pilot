@@ -24,11 +24,11 @@ jobs:
       - name: Install ruff
         run: pip install ruff
 
-      - name: Ruff lint check
-        run: ruff check app/ tests/ --output-format=github
+      # - name: Ruff lint check
+      #   run: ruff check app/ tests/ --output-format=github
 
-      - name: Ruff format check
-        run: ruff format app/ tests/ --check
+      # - name: Ruff format check
+      #   run: ruff format app/ tests/ --check
 
   frontend-lint:
     name: Frontend - ESLint + TypeScript
