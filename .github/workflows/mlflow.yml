@@ -7,8 +7,8 @@ on:
         description: "MLflow experiment name"
         required: true
         default: "ops-pilot-agent-eval"
-  schedule:
-    - cron: "0 3 * * 0"
+  # schedule:
+  #   - cron: "0 3 * * 0"
 
 jobs:
   track-agent-evals:
